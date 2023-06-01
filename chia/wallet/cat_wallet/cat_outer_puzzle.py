@@ -101,7 +101,7 @@ class CATOuterPuzzle:
             also = constructor.also()
             if also is not None:
                 puzzle = self._construct(also, puzzle)
-                solution = self._solve(also, solver, inner_puzzle, inner_solution)
+                solution = self._solve(also, solver, puzzle, solution)
             args = match_cat_puzzle(uncurry_puzzle(parent_spend.puzzle_reveal.to_program()))
             assert args is not None
             _, _, parent_inner_puzzle = args

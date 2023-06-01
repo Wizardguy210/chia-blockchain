@@ -1467,3 +1467,14 @@ class DIDWallet:
 
     def require_derivation_paths(self) -> bool:
         return True
+
+    async def match_hinted_coin(self, coin: Coin, hint: bytes32) -> bool:
+        if self.did_info.origin_coin is None:
+            return False
+        return (
+            create_singleton_puzzle(
+                hint,  # type: ignore[arg-type]
+                self.did_info.origin_coin.name(),
+            ).get_tree_hash_precalc(hint)
+            == coin.puzzle_hash
+        )

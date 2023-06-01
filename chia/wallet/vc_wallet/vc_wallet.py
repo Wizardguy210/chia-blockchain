@@ -419,6 +419,20 @@ class VCWallet:
         else:
             return [tx]  # pragma: no cover
 
+    async def get_vc_with_provider_in(self, authorized_providers: List[bytes32]) -> VerifiedCredential:
+        vc_records: List[VCRecord] = await self.store.get_vc_records_by_providers(authorized_providers)
+        if len(vc_records) == 0:
+            raise ValueError(f"VCWallet has no VCs with providers in the following list: {authorized_providers}")
+        else:
+            return vc_records[0].vc
+
+    async def proof_of_inclusions_for_root_and_keys(self, root: bytes32, keys: List[str]) -> Program:
+        vc_proofs: Optional[VCProofs] = await self.store.get_proofs_for_root(root)
+        if vc_proofs is None:
+            raise RuntimeError(f"No proofs exist for VC root: {root.hex()}")
+        else:
+            return vc_proofs.prove_keys(keys)
+
     async def select_coins(
         self,
         amount: uint64,

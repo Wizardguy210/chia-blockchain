@@ -290,6 +290,7 @@ class VCWallet:
             magic_conditions=[magic_condition],
         )
         did_announcement, coin_spend, vc = vc_record.vc.do_spend(inner_puzzle, innersol, new_proof_hash)
+        await self.standard_wallet.hack_populate_secret_key_for_puzzle_hash(inner_puzhash)
         spend_bundles = [
             await sign_coin_spends(
                 [coin_spend],

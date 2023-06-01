@@ -1554,3 +1554,52 @@ def _revoke_vc(
         "reuse_puzhash": reuse_puzhash,
     }
     asyncio.run(execute_with_wallet(wallet_rpc_port, fingerprint, extra_params, revoke_vc))
+
+
+@vcs_cmd.command("approve_r_cats", help="Claim any R-CATs that are currently pending VC approval")
+@click.option(
+    "-wp",
+    "--wallet-rpc-port",
+    help="Set the port where the Wallet is hosting the RPC interface. See the rpc_port under wallet in config.yaml",
+    type=int,
+    default=None,
+)
+@click.option("-f", "--fingerprint", help="Set the fingerprint to specify which key to use", type=int)
+@click.option("-i", "--id", help="Id of the wallet with the pending approval balance", type=int, required=True)
+@click.option(
+    "-a", "--min-amount-to-claim", help="The minimum amount to approve to move into the wallet", type=str, required=True
+)
+@click.option(
+    "-m", "--fee", type=str, default=0, show_default=True, help="Blockchain fee for approval transaction, in XCH"
+)
+@click.option("-ma", "--min-coin-amount", type=int, help="The minimum coin amount to select")
+@click.option("-l", "--max-coin-amount", type=int, help="The maximum coin amount to select")
+@click.option(
+    "--reuse",
+    help="Reuse existing address for the change.",
+    is_flag=True,
+    default=False,
+)
+def approve_r_cats_cmd(
+    wallet_rpc_port: Optional[int],
+    fingerprint: int,
+    id: int,
+    min_amount_to_claim: str,
+    fee: str,
+    min_coin_amount: Optional[int],
+    max_coin_amount: Optional[int],
+    reuse: bool,
+) -> None:
+    extra_params = {
+        "id": id,
+        "min_amount_to_claim": min_amount_to_claim,
+        "fee": fee,
+        "min_coin_amount": min_coin_amount,
+        "max_coin_amount": max_coin_amount,
+        "reuse": reuse,
+    }
+    import asyncio
+
+    from .wallet_funcs import approve_r_cats
+
+    asyncio.run(execute_with_wallet(wallet_rpc_port, fingerprint, extra_params, approve_r_cats))

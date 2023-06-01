@@ -77,6 +77,7 @@ from chia.wallet.util.query_filter import HashFilter, TransactionTypeFilter
 from chia.wallet.util.transaction_type import TransactionType
 from chia.wallet.util.wallet_sync_utils import fetch_coin_spend_for_coin_state
 from chia.wallet.util.wallet_types import CoinType, WalletType
+from chia.wallet.vc_wallet.cr_cat_wallet import CRCATWallet
 from chia.wallet.vc_wallet.vc_store import VCProofs
 from chia.wallet.vc_wallet.vc_wallet import VCWallet
 from chia.wallet.wallet import CHIP_0002_SIGN_MESSAGE_PREFIX, Wallet
@@ -234,6 +235,8 @@ class WalletRpcApi:
             "/vc_add_proofs": self.vc_add_proofs,
             "/vc_get_proofs_for_root": self.vc_get_proofs_for_root,
             "/vc_revoke": self.vc_revoke,
+            # CR-CATs
+            "/crcat_approve_pending": self.crcat_approve_pending,
         }
 
     def get_connections(self, request_node_type: Optional[NodeType]) -> List[Dict[str, Any]]:
@@ -832,9 +835,12 @@ class WalletRpcApi:
         wallet_balance["wallet_type"] = wallet.type()
         if self.service.logged_in_fingerprint is not None:
             wallet_balance["fingerprint"] = self.service.logged_in_fingerprint
-        if wallet.type() == WalletType.CAT:
+        if wallet.type() in {WalletType.CAT, WalletType.CRCAT}:
             assert isinstance(wallet, CATWallet)
             wallet_balance["asset_id"] = wallet.get_asset_id()
+            if wallet.type() == WalletType.CRCAT:
+                assert isinstance(wallet, CRCATWallet)
+                wallet_balance["pending_approval_balance"] = await wallet.get_pending_approval_balance()
         return {"wallet_balance": wallet_balance}
 
     async def get_transaction(self, request: Dict) -> EndpointResult:
@@ -956,7 +962,7 @@ class WalletRpcApi:
             assert isinstance(wallet, Wallet)
             raw_puzzle_hash = await wallet.get_puzzle_hash(create_new)
             address = encode_puzzle_hash(raw_puzzle_hash, prefix)
-        elif wallet.type() == WalletType.CAT:
+        elif wallet.type() in {WalletType.CAT, WalletType.CRCAT}:
             assert isinstance(wallet, CATWallet)
             raw_puzzle_hash = await wallet.standard_wallet.get_puzzle_hash(create_new)
             address = encode_puzzle_hash(raw_puzzle_hash, prefix)
@@ -1035,13 +1041,13 @@ class WalletRpcApi:
         wallet = self.service.wallet_state_manager.wallets[wallet_id]
 
         async with self.service.wallet_state_manager.lock:
-            if wallet.type() == WalletType.CAT:
+            if wallet.type() in {WalletType.CAT, WalletType.CRCAT}:
                 assert isinstance(wallet, CATWallet)
                 transaction: Dict = (await self.cat_spend(request, hold_lock=False))["transaction"]
             else:
                 transaction = (await self.create_signed_transaction(request, hold_lock=False))["signed_tx"]
             tr = TransactionRecord.from_json_dict_convenience(transaction)
-            if wallet.type() != WalletType.CAT:
+            if wallet.type() in {WalletType.CAT, WalletType.CRCAT}:
                 assert isinstance(wallet, Wallet)
                 await wallet.push_transaction(tr)
 
@@ -1162,7 +1168,7 @@ class WalletRpcApi:
         wallet = state_mgr.wallets[wallet_id]
         async with state_mgr.lock:
             all_coin_records = await state_mgr.coin_store.get_unspent_coins_for_wallet(wallet_id)
-            if wallet.type() == WalletType.CAT:
+            if wallet.type() in {WalletType.CAT, WalletType.CRCAT}:
                 assert isinstance(wallet, CATWallet)
                 spendable_coins: List[WalletCoinRecord] = await wallet.get_cat_spendable_coins(all_coin_records)
             else:
@@ -3588,6 +3594,44 @@ class WalletRpcApi:
             self.service.get_full_node_peer(),
             parsed_request.fee,
             parsed_request.reuse_puzhash,
+        )
+        for tx in txs:
+            await self.service.wallet_state_manager.add_pending_transaction(tx)
+
+        return {
+            "transactions": [tx.to_json_dict_convenience(self.service.config) for tx in txs],
+        }
+
+    async def crcat_approve_pending(self, request) -> Dict:
+        """
+        Moving any "pending approval" CR-CATs into the spendable balance of the wallet
+        :param request: Required 'wallet_id'. Optional 'min_amount_to_claim' (deafult: full balance).
+        Standard transaction params 'fee' & 'reuse_puzhash'.
+        :return: all relevant 'transactions'
+        """
+
+        @streamable
+        @dataclasses.dataclass(frozen=True)
+        class CRCATApprovePending(Streamable):
+            wallet_id: uint32
+            min_amount_to_claim: uint64
+            fee: uint64 = uint64(0)
+            min_coin_amount: Optional[uint64] = None
+            max_coin_amount: Optional[uint64] = None
+            exclude_coin_amounts: Optional[List[uint64]] = None
+            reuse_puzhash: Optional[bool] = None
+
+        parsed_request = CRCATApprovePending.from_json_dict(request)
+        cr_cat_wallet = self.service.wallet_state_manager.wallets[parsed_request.wallet_id]
+        assert isinstance(cr_cat_wallet, CRCATWallet)
+
+        txs = await cr_cat_wallet.claim_pending_approval_balance(
+            parsed_request.min_amount_to_claim,
+            fee=parsed_request.fee,
+            min_coin_amount=parsed_request.min_coin_amount,
+            max_coin_amount=parsed_request.max_coin_amount,
+            exclude_coin_amounts=parsed_request.exclude_coin_amounts,
+            reuse_puzhash=parsed_request.reuse_puzhash,
         )
         for tx in txs:
             await self.service.wallet_state_manager.add_pending_transaction(tx)

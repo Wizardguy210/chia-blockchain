@@ -5,7 +5,7 @@ import dataclasses
 import sys
 import time
 from secrets import token_bytes
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import pytest
 from blspy import G2Element
@@ -13,12 +13,15 @@ from blspy import G2Element
 from chia.consensus.cost_calculator import NPCResult
 from chia.full_node.bundle_tools import simple_solution_generator
 from chia.full_node.mempool_check_conditions import get_name_puzzle_conditions
+from chia.rpc.wallet_rpc_client import WalletRpcClient
+from chia.simulator.full_node_simulator import FullNodeSimulator
 from chia.simulator.simulator_protocol import FarmNewBlockProtocol
-from chia.simulator.time_out_assert import time_out_assert
-from chia.types.blockchain_format.program import INFINITE_COST
+from chia.simulator.time_out_assert import time_out_assert, time_out_assert_not_none
+from chia.types.blockchain_format.program import INFINITE_COST, Program
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.util.ints import uint32, uint64
 from chia.wallet.cat_wallet.cat_wallet import CATWallet
+from chia.wallet.did_wallet.did_wallet import DIDWallet
 from chia.wallet.outer_puzzles import AssetType
 from chia.wallet.puzzle_drivers import PuzzleInfo
 from chia.wallet.trade_record import TradeRecord
@@ -26,6 +29,11 @@ from chia.wallet.trading.offer import Offer
 from chia.wallet.trading.trade_status import TradeStatus
 from chia.wallet.transaction_record import TransactionRecord
 from chia.wallet.util.transaction_type import TransactionType
+from chia.wallet.vc_wallet.cr_cat_drivers import ProofsChecker
+from chia.wallet.vc_wallet.cr_cat_wallet import CRCATWallet
+from chia.wallet.vc_wallet.vc_store import VCProofs
+from chia.wallet.wallet_node import WalletNode
+from tests.wallet.vc_wallet.test_vc_wallet import mint_cr_cat
 
 buffer_blocks = 4
 
@@ -50,6 +58,29 @@ def create_tr_for_offer(offer: Offer) -> Tuple[TradeRecord, Offer]:
     )
 
 
+async def claim_pending_approval_balance(
+    client: WalletRpcClient,
+    wallet_node: WalletNode,
+    wallet: CATWallet,
+    full_node_api: FullNodeSimulator,
+    expected_pending_approval_balance: uint64,
+    expected_new_balance: uint64,
+) -> None:
+    assert isinstance(wallet, CRCATWallet)
+    await time_out_assert(15, wallet.get_pending_approval_balance, expected_pending_approval_balance)
+    txs = await client.crcat_approve_pending(
+        wallet.id(),
+        expected_pending_approval_balance,
+    )
+    spend_bundle = next(tx.spend_bundle for tx in txs if tx.spend_bundle is not None)
+    await time_out_assert_not_none(5, full_node_api.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
+    await full_node_api.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
+    await full_node_api.wait_for_wallet_synced(wallet_node=wallet_node, timeout=20)
+    await time_out_assert(15, wallet.get_confirmed_balance, expected_new_balance)
+    await time_out_assert(15, wallet.get_pending_approval_balance, 0)
+    await time_out_assert(15, wallet.get_unconfirmed_balance, expected_new_balance)
+
+
 @pytest.mark.parametrize(
     "trusted",
     [True, False],
@@ -57,15 +88,22 @@ def create_tr_for_offer(offer: Offer) -> Tuple[TradeRecord, Offer]:
 class TestCATTrades:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        "forwards_compat,reuse_puzhash",
+        "forwards_compat,reuse_puzhash,credential_restricted",
         [
-            (True, False),
-            (False, True),
-            (False, False),
+            (True, False, False),
+            (False, True, True),
+            (False, False, False),
+            (False, True, False),
+            (False, False, True),
         ],
     )
     async def test_cat_trades(
-        self, wallets_prefarm, forwards_compat: bool, reuse_puzhash: bool, softfork_height: uint32
+        self,
+        wallets_prefarm,
+        forwards_compat: bool,
+        reuse_puzhash: bool,
+        credential_restricted: bool,
+        softfork_height: uint32,
     ):
         (
             [wallet_node_maker, initial_maker_balance],
@@ -76,17 +114,146 @@ class TestCATTrades:
         wallet_taker = wallet_node_taker.wallet_state_manager.main_wallet
 
         # Create two new CATs, one in each wallet
-        async with wallet_node_maker.wallet_state_manager.lock:
-            cat_wallet_maker: CATWallet = await CATWallet.create_new_cat_wallet(
-                wallet_node_maker.wallet_state_manager, wallet_maker, {"identifier": "genesis_by_id"}, uint64(100)
-            )
-            await asyncio.sleep(1)
+        if credential_restricted:
+            client_maker = await WalletRpcClient.create(*wallet_node_maker._test_client_args)
+            client_taker = await WalletRpcClient.create(*wallet_node_taker._test_client_args)
 
-        async with wallet_node_taker.wallet_state_manager.lock:
-            new_cat_wallet_taker: CATWallet = await CATWallet.create_new_cat_wallet(
-                wallet_node_taker.wallet_state_manager, wallet_taker, {"identifier": "genesis_by_id"}, uint64(100)
+            did_wallet_maker: DIDWallet = await DIDWallet.create_new_did_wallet(
+                wallet_node_maker.wallet_state_manager, wallet_maker, uint64(1)
             )
-            await asyncio.sleep(1)
+            did_wallet_taker: DIDWallet = await DIDWallet.create_new_did_wallet(
+                wallet_node_taker.wallet_state_manager, wallet_taker, uint64(1)
+            )
+            initial_maker_balance -= 1
+            initial_taker_balance -= 1
+            did_id_maker = bytes32.from_hexstr(did_wallet_maker.get_my_DID())
+            did_id_taker = bytes32.from_hexstr(did_wallet_taker.get_my_DID())
+            tx_list = [
+                *await wallet_node_maker.wallet_state_manager.tx_store.get_unconfirmed_for_wallet(
+                    did_wallet_maker.id()
+                ),
+                *await wallet_node_taker.wallet_state_manager.tx_store.get_unconfirmed_for_wallet(
+                    did_wallet_taker.id()
+                ),
+            ]
+            for spend_bundle in (tx.spend_bundle for tx in tx_list if tx.spend_bundle is not None):
+                await time_out_assert_not_none(
+                    5, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name()
+                )
+            await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
+
+            vc_record_maker, txs = await client_maker.vc_mint(
+                did_id_maker, target_address=await wallet_maker.get_new_puzzlehash()
+            )
+            spend_bundle = next(tx.spend_bundle for tx in txs if tx.spend_bundle is not None)
+            await time_out_assert_not_none(30, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
+            await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
+            await full_node.wait_for_wallet_synced(wallet_node=wallet_node_maker, timeout=20)
+            vc_record_taker, txs = await client_taker.vc_mint(
+                did_id_taker, target_address=await wallet_taker.get_new_puzzlehash()
+            )
+            spend_bundle = next(tx.spend_bundle for tx in txs if tx.spend_bundle is not None)
+            await time_out_assert_not_none(30, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
+            await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
+            await full_node.wait_for_wallet_synced(wallet_node=wallet_node_taker, timeout=20)
+            initial_maker_balance -= 1
+            initial_taker_balance -= 1
+
+            proofs_maker: VCProofs = VCProofs({"foo": "1", "bar": "1", "zap": "1"})
+            proof_root_maker: bytes32 = proofs_maker.root()
+            txs = await client_maker.vc_spend(
+                vc_record_maker.vc.launcher_id,
+                new_proof_hash=proof_root_maker,
+            )
+            spend_bundle = next(tx.spend_bundle for tx in txs if tx.spend_bundle is not None)
+            await time_out_assert_not_none(5, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
+            await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
+            await full_node.wait_for_wallet_synced(wallet_node=wallet_node_maker, timeout=20)
+            await client_maker.vc_get(vc_record_maker.vc.launcher_id)
+
+            proofs_taker: VCProofs = VCProofs({"foo": "1", "bar": "1", "zap": "1"})
+            proof_root_taker: bytes32 = proofs_taker.root()
+            txs = await client_taker.vc_spend(
+                vc_record_taker.vc.launcher_id,
+                new_proof_hash=proof_root_taker,
+            )
+            spend_bundle = next(tx.spend_bundle for tx in txs if tx.spend_bundle is not None)
+            await time_out_assert_not_none(5, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
+            await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
+            await full_node.wait_for_wallet_synced(wallet_node=wallet_node_taker, timeout=20)
+            await client_taker.vc_get(vc_record_taker.vc.launcher_id)
+
+            await client_maker.vc_add_proofs(proofs_maker.key_value_pairs)
+            assert await client_maker.vc_get_proofs_for_root(proof_root_maker) == proofs_maker.key_value_pairs
+            vc_records, fetched_proofs = await client_maker.vc_get_list()
+            assert len(vc_records) == 1
+            assert fetched_proofs[proof_root_maker.hex()] == proofs_maker.key_value_pairs
+
+            await client_taker.vc_add_proofs(proofs_taker.key_value_pairs)
+            assert await client_taker.vc_get_proofs_for_root(proof_root_taker) == proofs_taker.key_value_pairs
+            vc_records, fetched_proofs = await client_taker.vc_get_list()
+            assert len(vc_records) == 1
+            assert fetched_proofs[proof_root_taker.hex()] == proofs_taker.key_value_pairs
+
+            tail_maker: Program = Program.to([3, (1, "maker"), None, None])
+            tail_taker: Program = Program.to([3, (1, "taker"), None, None])
+            proofs_checker_maker: ProofsChecker = ProofsChecker(["foo", "bar"])
+            proofs_checker_taker: ProofsChecker = ProofsChecker(["bar", "zap"])
+            authorized_providers: List[bytes32] = [did_id_maker, did_id_taker]
+            cat_wallet_maker: CATWallet = await CRCATWallet.get_or_create_wallet_for_cat(
+                wallet_node_maker.wallet_state_manager,
+                wallet_maker,
+                tail_maker.get_tree_hash().hex(),
+                None,
+                authorized_providers,
+                proofs_checker_maker,
+            )
+            new_cat_wallet_taker: CATWallet = await CRCATWallet.get_or_create_wallet_for_cat(
+                wallet_node_taker.wallet_state_manager,
+                wallet_taker,
+                tail_taker.get_tree_hash().hex(),
+                None,
+                authorized_providers,
+                proofs_checker_taker,
+            )
+            await mint_cr_cat(
+                1,
+                wallet_maker,
+                wallet_node_maker,
+                client_maker,
+                full_node,
+                authorized_providers,
+                tail_maker,
+                proofs_checker_maker,
+            )
+            await mint_cr_cat(
+                1,
+                wallet_taker,
+                wallet_node_taker,
+                client_taker,
+                full_node,
+                authorized_providers,
+                tail_taker,
+                proofs_checker_taker,
+            )
+            initial_maker_balance += 4000000000000
+            initial_taker_balance += 4000000000000
+        else:
+            async with wallet_node_maker.wallet_state_manager.lock:
+                cat_wallet_maker = await CATWallet.create_new_cat_wallet(
+                    wallet_node_maker.wallet_state_manager, wallet_maker, {"identifier": "genesis_by_id"}, uint64(100)
+                )
+                await asyncio.sleep(1)
+
+            async with wallet_node_taker.wallet_state_manager.lock:
+                new_cat_wallet_taker = await CATWallet.create_new_cat_wallet(
+                    wallet_node_taker.wallet_state_manager, wallet_taker, {"identifier": "genesis_by_id"}, uint64(100)
+                )
+                await asyncio.sleep(1)
+
+        if credential_restricted:
+            assert isinstance(cat_wallet_maker, CRCATWallet)
+            assert isinstance(new_cat_wallet_taker, CRCATWallet)
 
         for i in range(1, buffer_blocks):
             await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32(token_bytes())))
@@ -96,11 +263,22 @@ class TestCATTrades:
         await time_out_assert(15, new_cat_wallet_taker.get_unconfirmed_balance, 100)
 
         # Add the taker's CAT to the maker's wallet
-        assert cat_wallet_maker.cat_info.my_tail is not None
-        assert new_cat_wallet_taker.cat_info.my_tail is not None
-        new_cat_wallet_maker: CATWallet = await CATWallet.get_or_create_wallet_for_cat(
-            wallet_node_maker.wallet_state_manager, wallet_maker, new_cat_wallet_taker.get_asset_id()
-        )
+        if credential_restricted:
+            new_cat_wallet_maker: CATWallet = await CRCATWallet.get_or_create_wallet_for_cat(
+                wallet_node_maker.wallet_state_manager,
+                wallet_maker,
+                new_cat_wallet_taker.get_asset_id(),
+                None,
+                authorized_providers,
+                proofs_checker_taker,
+            )
+        else:
+            new_cat_wallet_maker = await CATWallet.get_or_create_wallet_for_cat(
+                wallet_node_maker.wallet_state_manager, wallet_maker, new_cat_wallet_taker.get_asset_id()
+            )
+
+        if credential_restricted:
+            assert isinstance(new_cat_wallet_maker, CRCATWallet)
 
         # Create the trade parameters
         MAKER_CHIA_BALANCE = initial_maker_balance - 100
@@ -143,12 +321,19 @@ class TestCATTrades:
         driver_dict: Dict[str, PuzzleInfo] = {}
         for wallet in (cat_wallet_maker, new_cat_wallet_maker):
             asset_id: str = wallet.get_asset_id()
-            driver_dict[asset_id] = PuzzleInfo(
-                {
-                    "type": AssetType.CAT.name,
-                    "tail": "0x" + asset_id,
+            driver_item: Dict[str, Any] = {
+                "type": AssetType.CAT.name,
+                "tail": "0x" + asset_id,
+            }
+            if credential_restricted:
+                driver_item["also"] = {
+                    "type": AssetType.CR.name,
+                    "authorized_providers": ["0x" + provider.hex() for provider in authorized_providers],
+                    "proofs_checker": proofs_checker_maker.as_program()
+                    if wallet == cat_wallet_maker
+                    else proofs_checker_taker.as_program(),
                 }
-            )
+            driver_dict[asset_id] = PuzzleInfo(driver_item)
 
         trade_manager_maker = wallet_node_maker.wallet_state_manager.trade_manager
         trade_manager_taker = wallet_node_taker.wallet_state_manager.trade_manager
@@ -208,6 +393,15 @@ class TestCATTrades:
 
         await time_out_assert(15, wallet_maker.get_confirmed_balance, MAKER_CHIA_BALANCE)
         await time_out_assert(15, wallet_maker.get_unconfirmed_balance, MAKER_CHIA_BALANCE)
+        if credential_restricted:
+            await claim_pending_approval_balance(
+                client_maker,
+                wallet_node_maker,
+                new_cat_wallet_maker,
+                full_node,
+                uint64(2),
+                uint64(MAKER_NEW_CAT_BALANCE),
+            )
         await time_out_assert(15, new_cat_wallet_maker.get_confirmed_balance, MAKER_NEW_CAT_BALANCE)
         await time_out_assert(15, new_cat_wallet_maker.get_unconfirmed_balance, MAKER_NEW_CAT_BALANCE)
         await time_out_assert(15, wallet_taker.get_confirmed_balance, TAKER_CHIA_BALANCE)
@@ -265,7 +459,10 @@ class TestCATTrades:
 
         if not forwards_compat:
             await time_out_assert(15, assert_trade_tx_number, True, wallet_node_maker, trade_make.trade_id, 1)
-        await time_out_assert(15, assert_trade_tx_number, True, wallet_node_taker, trade_take.trade_id, 3)
+        # CR-CATs will also have a TX record for the VC
+        await time_out_assert(
+            15, assert_trade_tx_number, True, wallet_node_taker, trade_take.trade_id, 4 if credential_restricted else 3
+        )
 
         # cat_for_chia
         if forwards_compat:
@@ -304,6 +501,8 @@ class TestCATTrades:
         cat_wallet_taker: CATWallet = await wallet_node_taker.wallet_state_manager.get_wallet_for_asset_id(
             cat_wallet_maker.get_asset_id()
         )
+        if credential_restricted:
+            assert isinstance(cat_wallet_taker, CRCATWallet)
 
         await time_out_assert(15, wallet_taker.get_unconfirmed_balance, TAKER_CHIA_BALANCE)
         await time_out_assert(15, cat_wallet_taker.get_unconfirmed_balance, TAKER_CAT_BALANCE)
@@ -324,7 +523,9 @@ class TestCATTrades:
         await time_out_assert(15, get_trade_and_status, TradeStatus.CONFIRMED, trade_manager_taker, trade_take)
         if not forwards_compat:
             await time_out_assert(15, assert_trade_tx_number, True, wallet_node_maker, trade_make.trade_id, 1)
-        await time_out_assert(15, assert_trade_tx_number, True, wallet_node_taker, trade_take.trade_id, 2)
+        await time_out_assert(
+            15, assert_trade_tx_number, True, wallet_node_taker, trade_take.trade_id, 3 if credential_restricted else 2
+        )
 
         # cat_for_cat
         maker_unused_index = (
@@ -377,6 +578,15 @@ class TestCATTrades:
         await full_node.process_transaction_records(records=tx_records)
         await full_node.wait_for_wallets_synced(wallet_nodes=[wallet_node_maker, wallet_node_taker], timeout=15)
 
+        if credential_restricted:
+            await claim_pending_approval_balance(
+                client_maker,
+                wallet_node_maker,
+                new_cat_wallet_maker,
+                full_node,
+                uint64(6),
+                uint64(MAKER_NEW_CAT_BALANCE),
+            )
         await time_out_assert(15, new_cat_wallet_maker.get_confirmed_balance, MAKER_NEW_CAT_BALANCE)
         await time_out_assert(15, new_cat_wallet_maker.get_unconfirmed_balance, MAKER_NEW_CAT_BALANCE)
         await time_out_assert(15, cat_wallet_maker.get_confirmed_balance, MAKER_CAT_BALANCE)
@@ -472,6 +682,23 @@ class TestCATTrades:
         await full_node.process_transaction_records(records=tx_records)
         await full_node.wait_for_wallets_synced(wallet_nodes=[wallet_node_maker, wallet_node_taker], timeout=15)
 
+        if credential_restricted:
+            await claim_pending_approval_balance(
+                client_maker,
+                wallet_node_maker,
+                cat_wallet_maker,
+                full_node,
+                uint64(8),
+                uint64(MAKER_CAT_BALANCE),
+            )
+            await claim_pending_approval_balance(
+                client_maker,
+                wallet_node_maker,
+                new_cat_wallet_maker,
+                full_node,
+                uint64(9),
+                uint64(MAKER_NEW_CAT_BALANCE),
+            )
         await time_out_assert(15, new_cat_wallet_maker.get_confirmed_balance, MAKER_NEW_CAT_BALANCE)
         await time_out_assert(15, new_cat_wallet_maker.get_unconfirmed_balance, MAKER_NEW_CAT_BALANCE)
         await time_out_assert(15, cat_wallet_maker.get_confirmed_balance, MAKER_CAT_BALANCE)
@@ -589,6 +816,15 @@ class TestCATTrades:
         await full_node.process_transaction_records(records=tx_records)
         await full_node.wait_for_wallets_synced(wallet_nodes=[wallet_node_maker, wallet_node_taker], timeout=15)
 
+        if credential_restricted:
+            await claim_pending_approval_balance(
+                client_maker,
+                wallet_node_maker,
+                new_cat_wallet_maker,
+                full_node,
+                uint64(15),
+                uint64(MAKER_NEW_CAT_BALANCE),
+            )
         await time_out_assert(15, new_cat_wallet_maker.get_confirmed_balance, MAKER_NEW_CAT_BALANCE)
         await time_out_assert(15, new_cat_wallet_maker.get_unconfirmed_balance, MAKER_NEW_CAT_BALANCE)
         await time_out_assert(15, cat_wallet_maker.get_confirmed_balance, MAKER_CAT_BALANCE)
@@ -601,14 +837,21 @@ class TestCATTrades:
             await time_out_assert(15, get_trade_and_status, TradeStatus.CONFIRMED, trade_manager_maker, trade_make)
         await time_out_assert(15, get_trade_and_status, TradeStatus.CONFIRMED, trade_manager_taker, trade_take)
 
-        # This tests an edge case where aggregated offers the include > 2 of the same kind of CAT
-        # (and therefore are solved as a complete ring)
-        bundle = Offer.aggregate([first_offer, second_offer, third_offer, fourth_offer, fifth_offer]).to_valid_spend()
-        program = simple_solution_generator(bundle)
-        result: NPCResult = get_name_puzzle_conditions(
-            program, INFINITE_COST, mempool_mode=True, height=softfork_height
-        )
-        assert result.error is None
+        # Because making/taking CR-CATs is asymetrical, approving this hacked together aggregation will fail
+        # The taker is "making" offers that it is approving with a VC which multiple actual makers would never do
+
+        # This is really a test of CATOuterPuzzle anyways and is not correlated with the CR layer
+        if not credential_restricted:
+            # This tests an edge case where aggregated offers the include > 2 of the same kind of CAT
+            # (and therefore are solved as a complete ring)
+            bundle = Offer.aggregate(
+                [first_offer, second_offer, third_offer, fourth_offer, fifth_offer]
+            ).to_valid_spend()
+            program = simple_solution_generator(bundle)
+            result: NPCResult = get_name_puzzle_conditions(
+                program, INFINITE_COST, mempool_mode=True, height=softfork_height
+            )
+            assert result.error is None
 
     @pytest.mark.asyncio
     async def test_trade_cancellation(self, wallets_prefarm):

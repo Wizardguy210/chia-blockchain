@@ -580,12 +580,22 @@ class VCWallet:
             )
         ), Solver({"vc_authorizations": coin_args})
 
-    async def get_vc_with_provider_in(self, authorized_providers: List[bytes32]) -> VerifiedCredential:
+    async def get_vc_with_provider_in_and_proofs(
+        self, authorized_providers: List[bytes32], proofs: List[str]
+    ) -> VerifiedCredential:
         vc_records: List[VCRecord] = await self.store.get_vc_records_by_providers(authorized_providers)
         if len(vc_records) == 0:
             raise ValueError(f"VCWallet has no VCs with providers in the following list: {authorized_providers}")
         else:
-            return vc_records[0].vc
+            for rec in vc_records:
+                if rec.vc.proof_hash is None:
+                    continue
+                vc_proofs: Optional[VCProofs] = await self.store.get_proofs_for_root(rec.vc.proof_hash)
+                if vc_proofs is None:
+                    continue
+                if all(proof in vc_proofs.key_value_pairs for proof in proofs):
+                    return rec.vc
+        raise ValueError(f"No authorized VC has the correct proofs: {proofs}")
 
     async def proof_of_inclusions_for_root_and_keys(self, root: bytes32, keys: List[str]) -> Program:
         vc_proofs: Optional[VCProofs] = await self.store.get_proofs_for_root(root)

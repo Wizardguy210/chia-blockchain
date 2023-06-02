@@ -462,7 +462,9 @@ class CRCATWallet(CATWallet):
         coin_records = [rec for _, rec in sorted(zip(cat_coins, coin_records), key=lambda tup: tup[0].name())]
         for coin in coin_records:
             if vc is None:
-                vc = await vc_wallet.get_vc_with_provider_in(self.info.authorized_providers)
+                vc = await vc_wallet.get_vc_with_provider_in_and_proofs(
+                    self.info.authorized_providers, self.info.proofs_checker.flags
+                )
 
             crcat: CRCAT = self.coin_record_to_crcat(coin)
             vc_announcements_to_make.append(crcat.expected_announcement())
@@ -717,7 +719,9 @@ class CRCATWallet(CATWallet):
 
         # Select the relevant VC coin
         vc_wallet: VCWallet = await self.wallet_state_manager.get_or_create_vc_wallet()
-        vc: Optional[VerifiedCredential] = await vc_wallet.get_vc_with_provider_in(self.info.authorized_providers)
+        vc: Optional[VerifiedCredential] = await vc_wallet.get_vc_with_provider_in_and_proofs(
+            self.info.authorized_providers, self.info.proofs_checker.flags
+        )
         if vc is None:
             raise RuntimeError(f"No VC exists that can approve spends for CR-CAT wallet {self.id()}")
         if vc.proof_hash is None:

@@ -99,7 +99,7 @@ class TestCATTrades:
     )
     async def test_cat_trades(
         self,
-        wallets_prefarm,
+        wallets_prefarm_services,
         forwards_compat: bool,
         reuse_puzhash: bool,
         credential_restricted: bool,
@@ -108,16 +108,15 @@ class TestCATTrades:
         (
             [wallet_node_maker, initial_maker_balance],
             [wallet_node_taker, initial_taker_balance],
+            [client_maker, client_taker],
+            [_, _],
             full_node,
-        ) = wallets_prefarm
+        ) = wallets_prefarm_services
         wallet_maker = wallet_node_maker.wallet_state_manager.main_wallet
         wallet_taker = wallet_node_taker.wallet_state_manager.main_wallet
 
         # Create two new CATs, one in each wallet
         if credential_restricted:
-            client_maker = await WalletRpcClient.create(*wallet_node_maker._test_client_args)
-            client_taker = await WalletRpcClient.create(*wallet_node_taker._test_client_args)
-
             did_wallet_maker: DIDWallet = await DIDWallet.create_new_did_wallet(
                 wallet_node_maker.wallet_state_manager, wallet_maker, uint64(1)
             )

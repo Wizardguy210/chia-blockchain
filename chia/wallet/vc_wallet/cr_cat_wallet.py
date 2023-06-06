@@ -49,7 +49,7 @@ from chia.wallet.vc_wallet.cr_cat_drivers import (
 from chia.wallet.vc_wallet.vc_drivers import VerifiedCredential
 from chia.wallet.vc_wallet.vc_wallet import VCWallet
 from chia.wallet.wallet import Wallet
-from chia.wallet.wallet_coin_record import WalletCoinRecord
+from chia.wallet.wallet_coin_record import MetadataTypes, WalletCoinRecord
 from chia.wallet.wallet_info import WalletInfo
 from chia.wallet.wallet_protocol import GSTOptionalArgs, WalletProtocol
 
@@ -221,6 +221,29 @@ class CRCATWallet(CATWallet):
             ):
                 self.log.info(f"Found pending approval CRCAT coin {coin.name().hex()}")
                 is_pending = True
+                created_timestamp = await self.wallet_state_manager.wallet_node.get_timestamp_for_height(uint32(height))
+                spend_bundle = SpendBundle([coin_spend], G2Element())
+                memos = compute_memos(spend_bundle)
+                # This will override the tx created in the wallet state manager
+                tx_record = TransactionRecord(
+                    confirmed_at_height=height,
+                    created_at_time=uint64(created_timestamp),
+                    to_puzzle_hash=hint_dict[coin.name()],
+                    amount=uint64(coin.amount),
+                    fee_amount=uint64(0),
+                    confirmed=True,
+                    sent=uint32(0),
+                    spend_bundle=None,
+                    additions=[coin],
+                    removals=[coin_spend.coin],
+                    wallet_id=self.id(),
+                    sent_to=[],
+                    trade_id=None,
+                    type=uint32(TransactionType.INCOMING_CRCAT_PENDING),
+                    name=coin.name(),
+                    memos=list(memos.items()),
+                )
+                await self.wallet_state_manager.tx_store.add_transaction_record(tx_record)
             else:
                 self.log.error(f"Unknown CRCAT inner puzzle, coin ID: {coin.name().hex()}")
                 return None
@@ -321,19 +344,34 @@ class CRCATWallet(CATWallet):
     async def convert_puzzle_hash(self, puzzle_hash: bytes32) -> bytes32:
         return puzzle_hash
 
-    def coin_record_to_crcat(self, record: WalletCoinRecord) -> CRCAT:
-        metadata: CRCATMetadata = CRCATMetadata.from_coin_record(record)
-        crcat: CRCAT = CRCAT(
-            record.coin,
-            self.info.limitations_program_hash,
-            metadata.lineage_proof,
-            self.info.authorized_providers,
-            self.info.proofs_checker.as_program(),
-            construct_pending_approval_state(metadata.inner_puzzle_hash, uint64(record.coin.amount)).get_tree_hash()
-            if record.coin_type == CoinType.CRCAT_PENDING
-            else metadata.inner_puzzle_hash,
-        )
-        return crcat
+    @staticmethod
+    def get_metadata_from_record(coin_record: WalletCoinRecord) -> CRCATMetadata:
+        metadata: MetadataTypes = coin_record.parsed_metadata()
+        assert isinstance(metadata, CRCATMetadata)
+        return metadata
+
+    def coin_record_to_crcat(self, coin_record: WalletCoinRecord) -> CRCAT:
+        if coin_record.coin_type not in {CoinType.CRCAT, CoinType.CRCAT_PENDING}:
+            raise ValueError(f"Attempting to spend a non-CRCAT coin: {coin_record.coin.name().hex()}")
+        if coin_record.metadata is None:
+            raise ValueError(f"Attempting to spend a CRCAT coin without metadata: {coin_record.coin.name().hex()}")
+        try:
+            metadata: CRCATMetadata = CRCATWallet.get_metadata_from_record(coin_record)
+            crcat: CRCAT = CRCAT(
+                coin_record.coin,
+                self.info.limitations_program_hash,
+                metadata.lineage_proof,
+                self.info.authorized_providers,
+                self.info.proofs_checker.as_program(),
+                construct_pending_approval_state(
+                    metadata.inner_puzzle_hash, uint64(coin_record.coin.amount)
+                ).get_tree_hash()
+                if coin_record.coin_type == CoinType.CRCAT_PENDING
+                else metadata.inner_puzzle_hash,
+            )
+            return crcat
+        except Exception as e:
+            raise ValueError(f"Error parsing CRCAT metadata: {e}")
 
     async def get_lineage_proof_for_coin(self, coin: Coin) -> Optional[LineageProof]:
         record: Optional[WalletCoinRecord] = await self.wallet_state_manager.coin_store.get_coin_record(coin.name())
@@ -737,7 +775,7 @@ class CRCATWallet(CATWallet):
 
         # Make CR-CAT bundle
         crcats_and_puzhashes: List[Tuple[CRCAT, bytes32]] = [
-            (crcat, CRCATMetadata.from_coin_record(record).inner_puzzle_hash)
+            (crcat, CRCATWallet.get_metadata_from_record(record).inner_puzzle_hash)
             for record in [r for r in crcat_records if r.coin in coins]
             for crcat in [self.coin_record_to_crcat(record)]
         ]

@@ -906,18 +906,22 @@ class WalletRpcApi:
         )
         tx_list = []
         # Format for clawback transactions
-        clawback_types = {TransactionType.INCOMING_CLAWBACK_RECEIVE.value, TransactionType.INCOMING_CLAWBACK_SEND.value}
+        extended_types = {
+            TransactionType.INCOMING_CLAWBACK_RECEIVE.value,
+            TransactionType.INCOMING_CLAWBACK_SEND.value,
+            TransactionType.INCOMING_CRCAT_PENDING.value,
+        }
         for tr in transactions:
             try:
                 tx = (await self._convert_tx_puzzle_hash(tr)).to_json_dict_convenience(self.service.config)
                 tx_list.append(tx)
-                if tx["type"] not in clawback_types or tx["spend_bundle"] is None:
+                if tx["type"] not in extended_types:
                     continue
                 coin: Coin = tr.additions[0]
                 record: Optional[WalletCoinRecord] = await self.service.wallet_state_manager.coin_store.get_coin_record(
                     coin.name()
                 )
-                assert record is not None, f"Cannot find coin record for clawback transaction {tx['name']}"
+                assert record is not None, f"Cannot find coin record for type {tx['type']} transaction {tx['name']}"
                 tx["metadata"] = record.parsed_metadata().to_json_dict()
                 tx["metadata"]["coin_id"] = coin.name().hex()
                 tx["metadata"]["spent"] = record.spent
@@ -1077,7 +1081,9 @@ class WalletRpcApi:
         tx_id_list: List[bytes] = []
         for coin_id, coin_record in coin_records.coin_id_to_record.items():
             try:
-                coins[coin_record.coin] = coin_record.parsed_metadata()
+                metadata = coin_record.parsed_metadata()
+                assert isinstance(metadata, ClawbackMetadata)
+                coins[coin_record.coin] = metadata
                 if len(coins) >= batch_size:
                     tx_id_list.extend((await self.service.wallet_state_manager.spend_clawback_coins(coins, tx_fee)))
                     coins = {}

@@ -21,6 +21,8 @@ from chia.wallet.cat_wallet.cat_utils import construct_cat_puzzle
 from chia.wallet.cat_wallet.cat_wallet import CATWallet
 from chia.wallet.did_wallet.did_wallet import DIDWallet
 from chia.wallet.puzzles.cat_loader import CAT_MOD
+from chia.wallet.util.query_filter import TransactionTypeFilter
+from chia.wallet.util.transaction_type import TransactionType
 from chia.wallet.util.wallet_types import WalletType
 from chia.wallet.vc_wallet.cr_cat_drivers import ProofsChecker, construct_cr_layer
 from chia.wallet.vc_wallet.cr_cat_wallet import CRCATWallet
@@ -265,6 +267,14 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     await time_out_assert(15, cr_cat_wallet_1.get_confirmed_balance, 0)
     await time_out_assert(15, cr_cat_wallet_1.get_pending_approval_balance, 100)
     await time_out_assert(15, cr_cat_wallet_1.get_unconfirmed_balance, 100)
+    pending_tx = await client_1.get_transactions(
+        cr_cat_wallet_1.id(),
+        0,
+        1,
+        reverse=True,
+        type_filter=TransactionTypeFilter.include([TransactionType.INCOMING_CRCAT_PENDING]),
+    )
+    assert len(pending_tx) == 1
 
     # Send the VC to wallet_1 to use for the CR-CATs
     txs = await client_0.vc_spend(vc_record.vc.launcher_id, new_puzhash=await wallet_1.get_new_puzzlehash())

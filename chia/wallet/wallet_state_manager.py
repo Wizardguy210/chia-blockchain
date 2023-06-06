@@ -111,7 +111,7 @@ from chia.wallet.vc_wallet.vc_store import VCStore
 from chia.wallet.vc_wallet.vc_wallet import VCWallet
 from chia.wallet.wallet import Wallet
 from chia.wallet.wallet_blockchain import WalletBlockchain
-from chia.wallet.wallet_coin_record import WalletCoinRecord
+from chia.wallet.wallet_coin_record import MetadataTypes, WalletCoinRecord
 from chia.wallet.wallet_coin_store import WalletCoinStore
 from chia.wallet.wallet_info import WalletInfo
 from chia.wallet.wallet_interested_store import WalletInterestedStore
@@ -757,7 +757,8 @@ class WalletStateManager:
         )
         for coin in unspent_coins.records:
             try:
-                metadata: ClawbackMetadata = coin.parsed_metadata()
+                metadata: MetadataTypes = coin.parsed_metadata()
+                assert isinstance(metadata, ClawbackMetadata)
                 if await metadata.is_recipient(self.puzzle_store):
                     coin_timestamp = await self.wallet_node.get_timestamp_for_height(coin.confirmed_block_height)
                     if current_timestamp - coin_timestamp >= metadata.time_lock:

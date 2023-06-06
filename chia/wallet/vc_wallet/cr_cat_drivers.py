@@ -22,7 +22,6 @@ from chia.wallet.puzzles.cat_loader import CAT_MOD
 from chia.wallet.puzzles.load_clvm import load_clvm_maybe_recompile
 from chia.wallet.puzzles.singleton_top_layer_v1_1 import SINGLETON_LAUNCHER_HASH, SINGLETON_MOD_HASH
 from chia.wallet.uncurried_puzzle import UncurriedPuzzle, uncurry_puzzle
-from chia.wallet.util.wallet_types import CoinType
 from chia.wallet.vc_wallet.vc_drivers import (
     COVENANT_LAYER_HASH,
     EML_TP_COVENANT_ADAPTER_HASH,
@@ -34,7 +33,6 @@ from chia.wallet.vc_wallet.vc_drivers import (
 )
 
 # Mods
-from chia.wallet.wallet_coin_record import WalletCoinRecord
 
 CREDENTIAL_RESTRICTION: Program = load_clvm_maybe_recompile(
     "credential_restriction.clsp",
@@ -638,15 +636,3 @@ class CRCATVersion(IntEnum):
 class CRCATMetadata(Streamable):
     lineage_proof: LineageProof
     inner_puzzle_hash: bytes32
-
-    @classmethod
-    def from_coin_record(cls, coin_record: WalletCoinRecord) -> CRCATMetadata:
-        if coin_record.coin_type not in {CoinType.CRCAT, CoinType.CRCAT_PENDING}:
-            raise ValueError(f"Attempting to spend a non-CRCAT coin: {coin_record.coin.name().hex()}")
-        if coin_record.metadata is None:
-            raise ValueError(f"Attempting to spend a CRCAT coin without metadata: {coin_record.coin.name().hex()}")
-        try:
-            metadata: CRCATMetadata = CRCATMetadata.from_bytes(coin_record.metadata.blob)
-            return metadata
-        except Exception as e:
-            raise ValueError(f"Error parsing CRCAT metadata: {e}")

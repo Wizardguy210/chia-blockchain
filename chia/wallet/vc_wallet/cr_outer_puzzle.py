@@ -88,8 +88,8 @@ class CROuterPuzzle:
                 None,
                 None,
             ]
-        return solve_cr_layer(
-            *vc_info,  # type: ignore
+        return solve_cr_layer(  # type: ignore[call-arg]
+            *vc_info,
             coin.name(),
             inner_solution,
         )

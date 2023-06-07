@@ -126,4 +126,4 @@ class TransactionRecord(Streamable):
         return False
 
     def hint_dict(self) -> Dict[bytes32, bytes32]:
-        return {coin_id: bytes32(memos[0]) for coin_id, memos in self.memos if len(memos) > 0}
+        return {coin_id: bytes32(memos[0]) for coin_id, memos in self.memos if len(memos) > 0 and len(memos[0]) == 32}

@@ -1047,7 +1047,7 @@ class WalletRpcApi:
             else:
                 transaction = (await self.create_signed_transaction(request, hold_lock=False))["signed_tx"]
             tr = TransactionRecord.from_json_dict_convenience(transaction)
-            if wallet.type() in {WalletType.CAT, WalletType.CRCAT}:
+            if wallet.type() not in {WalletType.CAT, WalletType.CRCAT}:
                 assert isinstance(wallet, Wallet)
                 await wallet.push_transaction(tr)
 

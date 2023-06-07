@@ -15,10 +15,9 @@ from chia.types.coin_spend import CoinSpend
 from chia.util.hash import std_hash
 from chia.util.ints import uint16, uint64
 from chia.util.streamable import Streamable, streamable
-from chia.wallet.cat_wallet.cat_utils import construct_cat_puzzle
+from chia.wallet.cat_wallet.cat_utils import CAT_MOD, construct_cat_puzzle
 from chia.wallet.lineage_proof import LineageProof
 from chia.wallet.payment import Payment
-from chia.wallet.puzzles.cat_loader import CAT_MOD
 from chia.wallet.puzzles.load_clvm import load_clvm_maybe_recompile
 from chia.wallet.puzzles.singleton_top_layer_v1_1 import SINGLETON_LAUNCHER_HASH, SINGLETON_MOD_HASH
 from chia.wallet.uncurried_puzzle import UncurriedPuzzle, uncurry_puzzle

@@ -21,14 +21,13 @@ from chia.util.hash import std_hash
 from chia.util.ints import uint8, uint32, uint64, uint128
 from chia.util.misc import VersionedBlob
 from chia.wallet.cat_wallet.cat_info import CRCATInfo
-from chia.wallet.cat_wallet.cat_utils import construct_cat_puzzle
+from chia.wallet.cat_wallet.cat_utils import CAT_MOD, construct_cat_puzzle
 from chia.wallet.cat_wallet.cat_wallet import CATWallet
 from chia.wallet.coin_selection import select_coins
 from chia.wallet.lineage_proof import LineageProof
 from chia.wallet.outer_puzzles import AssetType
 from chia.wallet.payment import Payment
 from chia.wallet.puzzle_drivers import PuzzleInfo
-from chia.wallet.puzzles.cat_loader import CAT_MOD
 from chia.wallet.trading.offer import Offer
 from chia.wallet.transaction_record import TransactionRecord
 from chia.wallet.uncurried_puzzle import uncurry_puzzle

@@ -146,14 +146,13 @@ class TestCATTrades:
             )
             spend_bundle = next(tx.spend_bundle for tx in txs if tx.spend_bundle is not None)
             await time_out_assert_not_none(30, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
-            await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
-            await full_node.wait_for_wallet_synced(wallet_node=wallet_node_maker, timeout=20)
             vc_record_taker, txs = await client_taker.vc_mint(
                 did_id_taker, target_address=await wallet_taker.get_new_puzzlehash()
             )
             spend_bundle = next(tx.spend_bundle for tx in txs if tx.spend_bundle is not None)
             await time_out_assert_not_none(30, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
             await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
+            await full_node.wait_for_wallet_synced(wallet_node=wallet_node_maker, timeout=20)
             await full_node.wait_for_wallet_synced(wallet_node=wallet_node_taker, timeout=20)
             initial_maker_balance -= 1
             initial_taker_balance -= 1
@@ -166,8 +165,6 @@ class TestCATTrades:
             )
             spend_bundle = next(tx.spend_bundle for tx in txs if tx.spend_bundle is not None)
             await time_out_assert_not_none(5, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
-            await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
-            await full_node.wait_for_wallet_synced(wallet_node=wallet_node_maker, timeout=20)
             await client_maker.vc_get(vc_record_maker.vc.launcher_id)
 
             proofs_taker: VCProofs = VCProofs({"foo": "1", "bar": "1", "zap": "1"})
@@ -179,6 +176,7 @@ class TestCATTrades:
             spend_bundle = next(tx.spend_bundle for tx in txs if tx.spend_bundle is not None)
             await time_out_assert_not_none(5, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
             await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
+            await full_node.wait_for_wallet_synced(wallet_node=wallet_node_maker, timeout=20)
             await full_node.wait_for_wallet_synced(wallet_node=wallet_node_taker, timeout=20)
             await client_taker.vc_get(vc_record_taker.vc.launcher_id)
 

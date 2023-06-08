@@ -3017,7 +3017,7 @@ class WalletRpcApi:
             wallet = self.service.wallet_state_manager.main_wallet
 
         assert isinstance(
-            wallet, (Wallet, CATWallet)
+            wallet, (Wallet, CATWallet, CRCATWallet)
         ), "create_signed_transaction only works for standard and CAT wallets"
 
         if "additions" not in request or len(request["additions"]) < 1:

@@ -496,7 +496,7 @@ class CRCATWallet(CATWallet):
         ).records
         assert len(coin_records) == len(cat_coins)
         # sort the coin records to ensure they are in the same order as the CAT coins
-        coin_records = [rec for _, rec in sorted(zip(cat_coins, coin_records), key=lambda tup: tup[0].name())]
+        coin_records = [rec for rec in sorted(coin_records, key=lambda rec: coin_ids.index(rec.coin.name()))]
         for coin in coin_records:
             if vc is None:
                 vc = await vc_wallet.get_vc_with_provider_in_and_proofs(

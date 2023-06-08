@@ -46,17 +46,20 @@ async def mint_cr_cat(
         tail.get_tree_hash(),
         Program.to(1),
     )
-    addr = encode_puzzle_hash(cat_puzzle.get_tree_hash(), "txch")
     CAT_AMOUNT_0 = uint64(100)
 
     await full_node_api.wait_for_wallet_synced(wallet_node=wallet_node_0, timeout=20)
-    tx = await client_0.send_transaction(1, CAT_AMOUNT_0, addr)
+    tx = await client_0.create_signed_transaction(
+        [
+            {
+                "puzzle_hash": cat_puzzle.get_tree_hash(),
+                "amount": CAT_AMOUNT_0,
+            }
+        ],
+        wallet_id=1,
+    )
     spend_bundle = tx.spend_bundle
     assert spend_bundle is not None
-
-    await time_out_assert_not_none(5, full_node_api.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
-    await full_node_api.farm_blocks_to_wallet(count=num_blocks, wallet=wallet_0)
-    await full_node_api.wait_for_wallet_synced(wallet_node=wallet_node_0, timeout=20)
 
     # Do the eve spend back to our wallet and add the CR layer
     cat_coin = next(c for c in spend_bundle.additions() if c.amount == CAT_AMOUNT_0)
@@ -95,10 +98,9 @@ async def mint_cr_cat(
         ],
         G2Element(),
     )
-    await client_0.push_tx(eve_spend)  # type: ignore [no-untyped-call]
-    await time_out_assert_not_none(5, full_node_api.full_node.mempool_manager.get_spendbundle, eve_spend.name())
-    await full_node_api.farm_blocks_to_wallet(count=num_blocks, wallet=wallet_0)
-    await full_node_api.wait_for_wallet_synced(wallet_node=wallet_node_0, timeout=20)
+    spend_bundle = SpendBundle.aggregate([spend_bundle, eve_spend])
+    await client_0.push_tx(spend_bundle)  # type: ignore [no-untyped-call]
+    await time_out_assert_not_none(5, full_node_api.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
 
 
 @pytest.mark.parametrize(
@@ -221,7 +223,9 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     assert fetched_proofs[proof_root.hex()] == proofs.key_value_pairs
 
     await mint_cr_cat(num_blocks, wallet_0, wallet_node_0, client_0, full_node_api, [did_id])
-    confirmed_balance += 2_000_000_000_000 * num_blocks * 2  # farming rewards during process
+    await full_node_api.farm_blocks_to_wallet(count=num_blocks, wallet=wallet_0)
+    await full_node_api.wait_for_wallet_synced(wallet_node=wallet_node_0, timeout=20)
+    confirmed_balance += 2_000_000_000_000 * num_blocks
     confirmed_balance -= 100  # cat mint amount
 
     # Send CR-CAT to another wallet
@@ -361,6 +365,8 @@ async def test_cat_wallet_conversion(
 
     did_id = bytes32([0] * 32)
     await mint_cr_cat(num_blocks, wallet_0, wallet_node_0, client_0, full_node_api, [did_id])
+    await full_node_api.farm_blocks_to_wallet(count=num_blocks, wallet=wallet_0)
+    await full_node_api.wait_for_wallet_synced(wallet_node=wallet_node_0, timeout=20)
 
     async def check_length(length: int, func: Callable[..., Awaitable[Any]], *args: Any) -> Optional[Literal[True]]:
         if len(await func(*args)) == length:

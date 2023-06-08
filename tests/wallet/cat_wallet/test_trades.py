@@ -139,7 +139,51 @@ class TestCATTrades:
                 await time_out_assert_not_none(
                     5, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name()
                 )
+
+            tail_maker: Program = Program.to([3, (1, "maker"), None, None])
+            tail_taker: Program = Program.to([3, (1, "taker"), None, None])
+            proofs_checker_maker: ProofsChecker = ProofsChecker(["foo", "bar"])
+            proofs_checker_taker: ProofsChecker = ProofsChecker(["bar", "zap"])
+            authorized_providers: List[bytes32] = [did_id_maker, did_id_taker]
+            cat_wallet_maker: CATWallet = await CRCATWallet.get_or_create_wallet_for_cat(
+                wallet_node_maker.wallet_state_manager,
+                wallet_maker,
+                tail_maker.get_tree_hash().hex(),
+                None,
+                authorized_providers,
+                proofs_checker_maker,
+            )
+            new_cat_wallet_taker: CATWallet = await CRCATWallet.get_or_create_wallet_for_cat(
+                wallet_node_taker.wallet_state_manager,
+                wallet_taker,
+                tail_taker.get_tree_hash().hex(),
+                None,
+                authorized_providers,
+                proofs_checker_taker,
+            )
+            await mint_cr_cat(
+                1,
+                wallet_maker,
+                wallet_node_maker,
+                client_maker,
+                full_node,
+                authorized_providers,
+                tail_maker,
+                proofs_checker_maker,
+            )
+            await mint_cr_cat(
+                1,
+                wallet_taker,
+                wallet_node_taker,
+                client_taker,
+                full_node,
+                authorized_providers,
+                tail_taker,
+                proofs_checker_taker,
+            )
             await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
+            await full_node.wait_for_wallet_synced(wallet_node=wallet_node_maker, timeout=20)
+            await full_node.wait_for_wallet_synced(wallet_node=wallet_node_taker, timeout=20)
 
             vc_record_maker, txs = await client_maker.vc_mint(
                 did_id_maker, target_address=await wallet_maker.get_new_puzzlehash()
@@ -191,50 +235,6 @@ class TestCATTrades:
             vc_records, fetched_proofs = await client_taker.vc_get_list()
             assert len(vc_records) == 1
             assert fetched_proofs[proof_root_taker.hex()] == proofs_taker.key_value_pairs
-
-            tail_maker: Program = Program.to([3, (1, "maker"), None, None])
-            tail_taker: Program = Program.to([3, (1, "taker"), None, None])
-            proofs_checker_maker: ProofsChecker = ProofsChecker(["foo", "bar"])
-            proofs_checker_taker: ProofsChecker = ProofsChecker(["bar", "zap"])
-            authorized_providers: List[bytes32] = [did_id_maker, did_id_taker]
-            cat_wallet_maker: CATWallet = await CRCATWallet.get_or_create_wallet_for_cat(
-                wallet_node_maker.wallet_state_manager,
-                wallet_maker,
-                tail_maker.get_tree_hash().hex(),
-                None,
-                authorized_providers,
-                proofs_checker_maker,
-            )
-            new_cat_wallet_taker: CATWallet = await CRCATWallet.get_or_create_wallet_for_cat(
-                wallet_node_taker.wallet_state_manager,
-                wallet_taker,
-                tail_taker.get_tree_hash().hex(),
-                None,
-                authorized_providers,
-                proofs_checker_taker,
-            )
-            await mint_cr_cat(
-                1,
-                wallet_maker,
-                wallet_node_maker,
-                client_maker,
-                full_node,
-                authorized_providers,
-                tail_maker,
-                proofs_checker_maker,
-            )
-            await mint_cr_cat(
-                1,
-                wallet_taker,
-                wallet_node_taker,
-                client_taker,
-                full_node,
-                authorized_providers,
-                tail_taker,
-                proofs_checker_taker,
-            )
-            initial_maker_balance += 4000000000000
-            initial_taker_balance += 4000000000000
         else:
             async with wallet_node_maker.wallet_state_manager.lock:
                 cat_wallet_maker = await CATWallet.create_new_cat_wallet(

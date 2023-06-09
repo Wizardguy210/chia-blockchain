@@ -219,24 +219,26 @@ class TestCATTrades:
                 cat_wallet_maker = await CATWallet.create_new_cat_wallet(
                     wallet_node_maker.wallet_state_manager, wallet_maker, {"identifier": "genesis_by_id"}, uint64(100)
                 )
+                txs = await wallet_node_maker.wallet_state_manager.tx_store.get_unconfirmed_for_wallet(
+                    cat_wallet_maker.id()
+                )
+                assert len(txs) > 0
+                for spend_bundle in (tx.spend_bundle for tx in txs if tx.spend_bundle is not None):
+                    await time_out_assert_not_none(
+                        5, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name()
+                    )
 
             async with wallet_node_taker.wallet_state_manager.lock:
                 new_cat_wallet_taker = await CATWallet.create_new_cat_wallet(
                     wallet_node_taker.wallet_state_manager, wallet_taker, {"identifier": "genesis_by_id"}, uint64(100)
                 )
-
-            tx_list = [
-                *await wallet_node_maker.wallet_state_manager.tx_store.get_unconfirmed_for_wallet(
-                    cat_wallet_maker.id()
-                ),
-                *await wallet_node_taker.wallet_state_manager.tx_store.get_unconfirmed_for_wallet(
+                txs = await wallet_node_taker.wallet_state_manager.tx_store.get_unconfirmed_for_wallet(
                     new_cat_wallet_taker.id()
-                ),
-            ]
-            for spend_bundle in (tx.spend_bundle for tx in tx_list if tx.spend_bundle is not None):
-                await time_out_assert_not_none(
-                    5, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name()
                 )
+                for spend_bundle in (tx.spend_bundle for tx in txs if tx.spend_bundle is not None):
+                    await time_out_assert_not_none(
+                        5, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name()
+                    )
 
         if credential_restricted:
             assert isinstance(cat_wallet_maker, CRCATWallet)

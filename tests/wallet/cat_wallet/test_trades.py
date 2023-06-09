@@ -111,6 +111,13 @@ class TestCATTrades:
         wallet_maker = wallet_node_maker.wallet_state_manager.main_wallet
         wallet_taker = wallet_node_taker.wallet_state_manager.main_wallet
 
+        # Because making/taking CR-CATs is asymetrical, approving the hacked together aggregation test will fail
+        # The taker is "making" offers that it is approving with a VC which multiple actual makers would never do
+
+        # This is really a test of CATOuterPuzzle anyways and is not correlated with any of our params
+        trusted = len(wallet_node_maker.config["trusted_peers"]) > 0
+        test_aggregation = not credential_restricted and not reuse_puzhash and trusted and not forwards_compat
+
         # Create two new CATs, one in each wallet
         if credential_restricted:
             did_wallet_maker: DIDWallet = await DIDWallet.create_new_did_wallet(
@@ -220,7 +227,7 @@ class TestCATTrades:
                     wallet_node_maker.wallet_state_manager, wallet_maker, {"identifier": "genesis_by_id"}, uint64(100)
                 )
                 txs = await wallet_node_maker.wallet_state_manager.tx_store.get_unconfirmed_for_wallet(
-                    cat_wallet_maker.id()
+                    wallet_maker.id()
                 )
                 assert len(txs) > 0
                 for spend_bundle in (tx.spend_bundle for tx in txs if tx.spend_bundle is not None):
@@ -233,7 +240,7 @@ class TestCATTrades:
                     wallet_node_taker.wallet_state_manager, wallet_taker, {"identifier": "genesis_by_id"}, uint64(100)
                 )
                 txs = await wallet_node_taker.wallet_state_manager.tx_store.get_unconfirmed_for_wallet(
-                    new_cat_wallet_taker.id()
+                    wallet_taker.id()
                 )
                 for spend_bundle in (tx.spend_bundle for tx in txs if tx.spend_bundle is not None):
                     await time_out_assert_not_none(
@@ -380,7 +387,8 @@ class TestCATTrades:
         assert trade_take is not None
         assert tx_records is not None
 
-        first_offer = Offer.from_bytes(trade_take.offer)
+        if test_aggregation:
+            first_offer = Offer.from_bytes(trade_take.offer)
 
         MAKER_CHIA_BALANCE -= 2  # -1 and -1 for fee
         MAKER_NEW_CAT_BALANCE += 2
@@ -566,7 +574,8 @@ class TestCATTrades:
         assert trade_take is not None
         assert tx_records is not None
 
-        second_offer = Offer.from_bytes(trade_take.offer)
+        if test_aggregation:
+            second_offer = Offer.from_bytes(trade_take.offer)
 
         MAKER_CAT_BALANCE -= 5
         MAKER_NEW_CAT_BALANCE += 6
@@ -667,7 +676,8 @@ class TestCATTrades:
         assert trade_take is not None
         assert tx_records is not None
 
-        third_offer = Offer.from_bytes(trade_take.offer)
+        if test_aggregation:
+            third_offer = Offer.from_bytes(trade_take.offer)
 
         MAKER_CHIA_BALANCE -= 7
         MAKER_CAT_BALANCE += 8
@@ -741,7 +751,8 @@ class TestCATTrades:
         assert trade_take is not None
         assert tx_records is not None
 
-        fourth_offer = Offer.from_bytes(trade_take.offer)
+        if test_aggregation:
+            fourth_offer = Offer.from_bytes(trade_take.offer)
 
         MAKER_CAT_BALANCE -= 11
         MAKER_NEW_CAT_BALANCE -= 12
@@ -799,7 +810,8 @@ class TestCATTrades:
         assert trade_take is not None
         assert tx_records is not None
 
-        fifth_offer = Offer.from_bytes(trade_take.offer)
+        if test_aggregation:
+            fifth_offer = Offer.from_bytes(trade_take.offer)
 
         MAKER_CHIA_BALANCE -= 13
         MAKER_CAT_BALANCE -= 14
@@ -835,12 +847,7 @@ class TestCATTrades:
             await time_out_assert(15, get_trade_and_status, TradeStatus.CONFIRMED, trade_manager_maker, trade_make)
         await time_out_assert(15, get_trade_and_status, TradeStatus.CONFIRMED, trade_manager_taker, trade_take)
 
-        # Because making/taking CR-CATs is asymetrical, approving this hacked together aggregation will fail
-        # The taker is "making" offers that it is approving with a VC which multiple actual makers would never do
-
-        # This is really a test of CATOuterPuzzle anyways and is not correlated with the CR layer
-        # Nor is it correlated with puzzle hash reusal so we'll decorrelate that as well
-        if not credential_restricted and not reuse_puzhash:
+        if test_aggregation:
             # This tests an edge case where aggregated offers the include > 2 of the same kind of CAT
             # (and therefore are solved as a complete ring)
             bundle = Offer.aggregate(

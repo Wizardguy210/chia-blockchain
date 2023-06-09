@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import sys
 import time
-from secrets import token_bytes
 from typing import Any, Dict, List, Tuple
 
 import pytest
@@ -34,8 +32,6 @@ from chia.wallet.vc_wallet.cr_cat_wallet import CRCATWallet
 from chia.wallet.vc_wallet.vc_store import VCProofs
 from chia.wallet.wallet_node import WalletNode
 from tests.wallet.vc_wallet.test_vc_wallet import mint_cr_cat
-
-buffer_blocks = 4
 
 
 def create_tr_for_offer(offer: Offer) -> Tuple[TradeRecord, Offer]:
@@ -209,7 +205,6 @@ class TestCATTrades:
             )
             spend_bundle = next(tx.spend_bundle for tx in txs if tx.spend_bundle is not None)
             await time_out_assert_not_none(5, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
-            await client_maker.vc_get(vc_record_maker.vc.launcher_id)
 
             proofs_taker: VCProofs = VCProofs({"foo": "1", "bar": "1", "zap": "1"})
             proof_root_taker: bytes32 = proofs_taker.root()
@@ -219,11 +214,43 @@ class TestCATTrades:
             )
             spend_bundle = next(tx.spend_bundle for tx in txs if tx.spend_bundle is not None)
             await time_out_assert_not_none(5, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
-            await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
-            await full_node.wait_for_wallet_synced(wallet_node=wallet_node_maker, timeout=20)
-            await full_node.wait_for_wallet_synced(wallet_node=wallet_node_taker, timeout=20)
-            await client_taker.vc_get(vc_record_taker.vc.launcher_id)
+        else:
+            async with wallet_node_maker.wallet_state_manager.lock:
+                cat_wallet_maker = await CATWallet.create_new_cat_wallet(
+                    wallet_node_maker.wallet_state_manager, wallet_maker, {"identifier": "genesis_by_id"}, uint64(100)
+                )
 
+            async with wallet_node_taker.wallet_state_manager.lock:
+                new_cat_wallet_taker = await CATWallet.create_new_cat_wallet(
+                    wallet_node_taker.wallet_state_manager, wallet_taker, {"identifier": "genesis_by_id"}, uint64(100)
+                )
+
+            tx_list = [
+                *await wallet_node_maker.wallet_state_manager.tx_store.get_unconfirmed_for_wallet(
+                    cat_wallet_maker.id()
+                ),
+                *await wallet_node_taker.wallet_state_manager.tx_store.get_unconfirmed_for_wallet(
+                    new_cat_wallet_taker.id()
+                ),
+            ]
+            for spend_bundle in (tx.spend_bundle for tx in tx_list if tx.spend_bundle is not None):
+                await time_out_assert_not_none(
+                    5, full_node.full_node.mempool_manager.get_spendbundle, spend_bundle.name()
+                )
+
+        if credential_restricted:
+            assert isinstance(cat_wallet_maker, CRCATWallet)
+            assert isinstance(new_cat_wallet_taker, CRCATWallet)
+
+        await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32([0] * 32)))
+        await full_node.wait_for_wallet_synced(wallet_node=wallet_node_maker, timeout=20)
+        await full_node.wait_for_wallet_synced(wallet_node=wallet_node_taker, timeout=20)
+        await time_out_assert(15, cat_wallet_maker.get_confirmed_balance, 100)
+        await time_out_assert(15, cat_wallet_maker.get_unconfirmed_balance, 100)
+        await time_out_assert(15, new_cat_wallet_taker.get_confirmed_balance, 100)
+        await time_out_assert(15, new_cat_wallet_taker.get_unconfirmed_balance, 100)
+
+        if credential_restricted:
             await client_maker.vc_add_proofs(proofs_maker.key_value_pairs)
             assert await client_maker.vc_get_proofs_for_root(proof_root_maker) == proofs_maker.key_value_pairs
             vc_records, fetched_proofs = await client_maker.vc_get_list()
@@ -235,29 +262,6 @@ class TestCATTrades:
             vc_records, fetched_proofs = await client_taker.vc_get_list()
             assert len(vc_records) == 1
             assert fetched_proofs[proof_root_taker.hex()] == proofs_taker.key_value_pairs
-        else:
-            async with wallet_node_maker.wallet_state_manager.lock:
-                cat_wallet_maker = await CATWallet.create_new_cat_wallet(
-                    wallet_node_maker.wallet_state_manager, wallet_maker, {"identifier": "genesis_by_id"}, uint64(100)
-                )
-                await asyncio.sleep(1)
-
-            async with wallet_node_taker.wallet_state_manager.lock:
-                new_cat_wallet_taker = await CATWallet.create_new_cat_wallet(
-                    wallet_node_taker.wallet_state_manager, wallet_taker, {"identifier": "genesis_by_id"}, uint64(100)
-                )
-                await asyncio.sleep(1)
-
-        if credential_restricted:
-            assert isinstance(cat_wallet_maker, CRCATWallet)
-            assert isinstance(new_cat_wallet_taker, CRCATWallet)
-
-        for i in range(1, buffer_blocks):
-            await full_node.farm_new_transaction_block(FarmNewBlockProtocol(bytes32(token_bytes())))
-        await time_out_assert(15, cat_wallet_maker.get_confirmed_balance, 100)
-        await time_out_assert(15, cat_wallet_maker.get_unconfirmed_balance, 100)
-        await time_out_assert(15, new_cat_wallet_taker.get_confirmed_balance, 100)
-        await time_out_assert(15, new_cat_wallet_taker.get_unconfirmed_balance, 100)
 
         # Add the taker's CAT to the maker's wallet
         if credential_restricted:
@@ -360,7 +364,6 @@ class TestCATTrades:
             success, trade_make, error = await trade_manager_maker.create_offer_for_ids(
                 chia_for_cat, fee=uint64(1), reuse_puzhash=reuse_puzhash
             )
-            await asyncio.sleep(1)
             assert error is None
             assert success is True
             assert trade_make is not None
@@ -549,7 +552,6 @@ class TestCATTrades:
             success, trade_make, error = await trade_manager_maker.create_offer_for_ids(
                 cat_for_cat, reuse_puzhash=reuse_puzhash
             )
-            await asyncio.sleep(1)
             assert error is None
             assert success is True
             assert trade_make is not None
@@ -651,7 +653,6 @@ class TestCATTrades:
                 chia_for_multiple_cat,
                 driver_dict=driver_dict,
             )
-            await asyncio.sleep(1)
             assert error is None
             assert success is True
             assert trade_make is not None
@@ -727,7 +728,6 @@ class TestCATTrades:
             success, trade_make, error = await trade_manager_maker.create_offer_for_ids(
                 multiple_cat_for_chia,
             )
-            await asyncio.sleep(1)
             assert error is None
             assert success is True
             assert trade_make is not None
@@ -785,7 +785,6 @@ class TestCATTrades:
             success, trade_make, error = await trade_manager_maker.create_offer_for_ids(
                 chia_and_cat_for_cat,
             )
-            await asyncio.sleep(1)
             assert error is None
             assert success is True
             assert trade_make is not None
@@ -838,7 +837,8 @@ class TestCATTrades:
         # The taker is "making" offers that it is approving with a VC which multiple actual makers would never do
 
         # This is really a test of CATOuterPuzzle anyways and is not correlated with the CR layer
-        if not credential_restricted:
+        # Nor is it correlated with puzzle hash reusal so we'll decorrelate that as well
+        if not credential_restricted and not reuse_puzhash:
             # This tests an edge case where aggregated offers the include > 2 of the same kind of CAT
             # (and therefore are solved as a complete ring)
             bundle = Offer.aggregate(
@@ -894,7 +894,6 @@ class TestCATTrades:
             return TradeStatus(trade_rec.status)
 
         success, trade_make, error = await trade_manager_maker.create_offer_for_ids(cat_for_chia)
-        await asyncio.sleep(1)
         assert error is None
         assert success is True
         assert trade_make is not None

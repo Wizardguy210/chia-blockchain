@@ -111,11 +111,15 @@ class TestCATTrades:
         wallet_maker = wallet_node_maker.wallet_state_manager.main_wallet
         wallet_taker = wallet_node_taker.wallet_state_manager.main_wallet
 
+        trusted = len(wallet_node_maker.config["trusted_peers"]) > 0
+
+        # For performance and deprecation reasons, we're going to decorrelate forwards_compat for all except one case
+        if forwards_compat and not (trusted and softfork_height == 1000000):
+            return
+
         # Because making/taking CR-CATs is asymetrical, approving the hacked together aggregation test will fail
         # The taker is "making" offers that it is approving with a VC which multiple actual makers would never do
-
         # This is really a test of CATOuterPuzzle anyways and is not correlated with any of our params
-        trusted = len(wallet_node_maker.config["trusted_peers"]) > 0
         test_aggregation = not credential_restricted and not reuse_puzhash and trusted and not forwards_compat
 
         # Create two new CATs, one in each wallet

@@ -84,6 +84,11 @@ async def claim_pending_approval_balance(
 class TestCATTrades:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
+        "wallets_prefarm_services",
+        [1],
+        indirect=["wallets_prefarm_services"],
+    )
+    @pytest.mark.parametrize(
         "forwards_compat,reuse_puzhash,credential_restricted",
         [
             (True, False, False),

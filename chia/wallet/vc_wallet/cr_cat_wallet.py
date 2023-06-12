@@ -389,7 +389,7 @@ class CRCATWallet(CATWallet):
         puzzle_announcements_to_consume: Optional[Set[Announcement]] = None,
         min_coin_amount: Optional[uint64] = None,
         max_coin_amount: Optional[uint64] = None,
-        exclude_coin_amounts: Optional[List[uint64]] = None,
+        excluded_coin_amounts: Optional[List[uint64]] = None,
         exclude_coins: Optional[Set[Coin]] = None,
         reuse_puzhash: Optional[bool] = None,
         add_authorizations_to_cr_cats: bool = True,
@@ -429,7 +429,7 @@ class CRCATWallet(CATWallet):
                     exclude=list(exclude_coins),
                     min_coin_amount=min_coin_amount,
                     max_coin_amount=max_coin_amount,
-                    excluded_coin_amounts=exclude_coin_amounts,
+                    excluded_coin_amounts=excluded_coin_amounts,
                 )
             )
         elif exclude_coins is not None:
@@ -516,7 +516,7 @@ class CRCATWallet(CATWallet):
                             announcements_to_assert={announcement},
                             min_coin_amount=min_coin_amount,
                             max_coin_amount=max_coin_amount,
-                            exclude_coin_amounts=exclude_coin_amounts,
+                            excluded_coin_amounts=excluded_coin_amounts,
                             reuse_puzhash=reuse_puzhash,
                         )
                         innersol = self.standard_wallet.make_solution(
@@ -531,7 +531,7 @@ class CRCATWallet(CATWallet):
                             uint64(regular_chia_to_claim),
                             min_coin_amount=min_coin_amount,
                             max_coin_amount=max_coin_amount,
-                            exclude_coin_amounts=exclude_coin_amounts,
+                            excluded_coin_amounts=excluded_coin_amounts,
                             reuse_puzhash=reuse_puzhash,
                         )
                         innersol = self.standard_wallet.make_solution(
@@ -637,11 +637,11 @@ class CRCATWallet(CATWallet):
         puzzle_announcements_to_consume: Optional[Set[Announcement]] = None,
         min_coin_amount: Optional[uint64] = None,
         max_coin_amount: Optional[uint64] = None,
-        exclude_coin_amounts: Optional[List[uint64]] = None,
+        excluded_coin_amounts: Optional[List[uint64]] = None,
         reuse_puzhash: Optional[bool] = None,
         **kwargs: Unpack[GSTOptionalArgs],
     ) -> List[TransactionRecord]:
-        exclude_cat_coins: Optional[Set[Coin]] = kwargs.get("exclude_cat_coins", None)
+        exclude_cat_coins: Optional[Set[Coin]] = kwargs.get("excluded_cat_coins", None)
         # (extra_delta, tail_reveal, tail_solution)
         cat_discrepancy: Optional[Tuple[int, Program, Program]] = kwargs.get("cat_discrepancy", None)
         add_authorizations_to_cr_cats: bool = kwargs.get("add_authorizations_to_cr_cats", True)
@@ -680,7 +680,7 @@ class CRCATWallet(CATWallet):
             puzzle_announcements_to_consume=puzzle_announcements_to_consume,
             min_coin_amount=min_coin_amount,
             max_coin_amount=max_coin_amount,
-            exclude_coin_amounts=exclude_coin_amounts,
+            excluded_coin_amounts=excluded_coin_amounts,
             exclude_coins=exclude_cat_coins,
             reuse_puzhash=reuse_puzhash,
             add_authorizations_to_cr_cats=add_authorizations_to_cr_cats,
@@ -721,7 +721,7 @@ class CRCATWallet(CATWallet):
         coins: Optional[Set[Coin]] = None,
         min_coin_amount: Optional[uint64] = None,
         max_coin_amount: Optional[uint64] = None,
-        exclude_coin_amounts: Optional[List[uint64]] = None,
+        excluded_coin_amounts: Optional[List[uint64]] = None,
         reuse_puzhash: Optional[bool] = None,
     ) -> List[TransactionRecord]:
         # Select the relevant CR-CAT coins
@@ -740,7 +740,7 @@ class CRCATWallet(CATWallet):
                 uint128(min_amount_to_claim),
                 None,
                 min_coin_amount,
-                exclude_coin_amounts,
+                excluded_coin_amounts,
             )
 
         # Select the relevant XCH coins
@@ -749,7 +749,7 @@ class CRCATWallet(CATWallet):
                 fee,
                 min_coin_amount=min_coin_amount,
                 max_coin_amount=max_coin_amount,
-                excluded_coin_amounts=exclude_coin_amounts,
+                excluded_coin_amounts=excluded_coin_amounts,
             )
         else:
             chia_coins = set()
@@ -803,7 +803,7 @@ class CRCATWallet(CATWallet):
                 announcements_to_assert=set(Announcement(coin.name(), nonce) for coin in coins.union({vc.coin})),
                 min_coin_amount=min_coin_amount,
                 max_coin_amount=max_coin_amount,
-                exclude_coin_amounts=exclude_coin_amounts,
+                excluded_coin_amounts=excluded_coin_amounts,
                 reuse_puzhash=reuse_puzhash,
             )
             if chia_tx.spend_bundle is None:

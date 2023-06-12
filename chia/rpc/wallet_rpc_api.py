@@ -3633,7 +3633,7 @@ class WalletRpcApi:
             fee: uint64 = uint64(0)
             min_coin_amount: Optional[uint64] = None
             max_coin_amount: Optional[uint64] = None
-            exclude_coin_amounts: Optional[List[uint64]] = None
+            excluded_coin_amounts: Optional[List[uint64]] = None
             reuse_puzhash: Optional[bool] = None
 
         parsed_request = CRCATApprovePending.from_json_dict(request)
@@ -3645,7 +3645,7 @@ class WalletRpcApi:
             fee=parsed_request.fee,
             min_coin_amount=parsed_request.min_coin_amount,
             max_coin_amount=parsed_request.max_coin_amount,
-            exclude_coin_amounts=parsed_request.exclude_coin_amounts,
+            excluded_coin_amounts=parsed_request.excluded_coin_amounts,
             reuse_puzhash=parsed_request.reuse_puzhash,
         )
         for tx in txs:

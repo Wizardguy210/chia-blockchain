@@ -670,6 +670,7 @@ async def test_vc_lifecycle(test_syncing: bool, cost_logger: CostLogger) -> None
                 [
                     (
                         cr_1 if error != "use_malicious_cats" else malicious_cr_1,
+                        0,
                         ACS,
                         Program.to(
                             [
@@ -684,6 +685,7 @@ async def test_vc_lifecycle(test_syncing: bool, cost_logger: CostLogger) -> None
                     ),
                     (
                         cr_2 if error != "use_malicious_cats" else malicious_cr_2,
+                        0,
                         ACS,
                         Program.to(
                             [

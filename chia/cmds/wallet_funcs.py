@@ -96,7 +96,7 @@ async def get_unit_name_for_wallet_id(
     wallet_type: WalletType,
     wallet_id: int,
     wallet_client: WalletRpcClient,
-):
+):  # pragma: no cover
     if wallet_type in {
         WalletType.STANDARD_WALLET,
         WalletType.POOLING_WALLET,
@@ -726,7 +726,7 @@ async def cancel_offer(args: dict, wallet_client: WalletRpcClient, fingerprint: 
             print(f"Use chia wallet get_offers --id {trade_record.trade_id} -f {fingerprint} to view cancel status")
 
 
-def wallet_coin_unit(typ: WalletType, address_prefix: str) -> Tuple[str, int]:
+def wallet_coin_unit(typ: WalletType, address_prefix: str) -> Tuple[str, int]:  # pragma: no cover
     if typ in {WalletType.CAT, WalletType.CRCAT}:
         return "", units["cat"]
     if typ in [WalletType.STANDARD_WALLET, WalletType.POOLING_WALLET, WalletType.MULTI_SIG]:
@@ -745,7 +745,7 @@ def print_balance(amount: int, scale: int, address_prefix: str, *, decimal_only:
     return ret
 
 
-async def print_balances(args: dict, wallet_client: WalletRpcClient, fingerprint: int) -> None:
+async def print_balances(args: dict, wallet_client: WalletRpcClient, fingerprint: int) -> None:  # pragma: no cover
     wallet_type: Optional[WalletType] = None
     if "type" in args:
         wallet_type = WalletType(args["type"])

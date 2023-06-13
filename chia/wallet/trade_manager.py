@@ -960,7 +960,7 @@ class TradeManager:
                         assert isinstance(wallet, VCWallet)
                         return await wallet.add_vc_authorization(offer, solver, reuse_puzhash)
                 else:
-                    raise ValueError("No VCs to approve CR-CATs with")
+                    raise ValueError("No VCs to approve CR-CATs with")  # pragma: no cover
 
         return offer, Solver({})
 
@@ -986,7 +986,7 @@ class TradeManager:
                         ProofsChecker.from_program(uncurry_puzzle(puzzle_info["also"]["proofs_checker"])).flags,
                     )
                     if vc is None:
-                        raise ValueError("Cannot request CR-CATs that you cannot approve with a VC")
+                        raise ValueError("Cannot request CR-CATs that you cannot approve with a VC")  # pragma: no cover
 
             return {
                 asset_id: [

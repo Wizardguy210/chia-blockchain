@@ -75,7 +75,7 @@ class CRCATWallet(CATWallet):
         cat_tail_info: Dict[str, Any],
         amount: uint64,
         name: Optional[str] = None,
-    ) -> "CATWallet":
+    ) -> "CATWallet":  # pragma: no cover
         raise NotImplementedError("create_new_cat_wallet is a legacy method and is not available on CR-CAT wallets")
 
     @staticmethod
@@ -87,7 +87,7 @@ class CRCATWallet(CATWallet):
         authorized_providers: Optional[List[bytes32]] = None,
         proofs_checker: Optional[ProofsChecker] = None,
     ) -> CRCATWallet:
-        if authorized_providers is None or proofs_checker is None:
+        if authorized_providers is None or proofs_checker is None:  # pragma: no cover
             raise ValueError("get_or_create_wallet_for_cat was call on CRCATWallet without proper arguments")
         self = CRCATWallet()
         self.cost_of_single_tx = 78000000  # Measured in testing
@@ -125,7 +125,7 @@ class CRCATWallet(CATWallet):
         potential_subclasses: Dict[AssetType, Any] = {},
     ) -> Any:
         cr_layer: Optional[PuzzleInfo] = puzzle_driver.also()
-        if cr_layer is None:
+        if cr_layer is None:  # pragma: no cover
             raise ValueError("create_from_puzzle_info called on CRCATWallet with a non CR-CAT puzzle driver")
         return await cls.get_or_create_wallet_for_cat(
             wallet_state_manager,
@@ -185,7 +185,7 @@ class CRCATWallet(CATWallet):
     def get_asset_id(self) -> str:
         return self.info.limitations_program_hash.hex()
 
-    async def set_tail_program(self, tail_program: str) -> None:
+    async def set_tail_program(self, tail_program: str) -> None:  # pragma: no cover
         raise NotImplementedError("set_tail_program is a legacy method and is not available on CR-CAT wallets")
 
     async def coin_added(self, coin: Coin, height: uint32, peer: WSChiaConnection) -> None:
@@ -243,7 +243,7 @@ class CRCATWallet(CATWallet):
                     memos=list(memos.items()),
                 )
                 await self.wallet_state_manager.tx_store.add_transaction_record(tx_record)
-            else:
+            else:  # pragma: no cover
                 self.log.error(f"Unknown CRCAT inner puzzle, coin ID: {coin.name().hex()}")
                 return None
             coin_record = WalletCoinRecord(
@@ -273,7 +273,7 @@ class CRCATWallet(CATWallet):
             )
             if len(child_coin_records) > 0:
                 for record in child_coin_records:
-                    if record.wallet_id == self.id():
+                    if record.wallet_id == self.id():  # pragma: no cover
                         await self.wallet_state_manager.coin_store.delete_coin_record(record.coin.name())
                         # We also need to make sure there's no record of the transaction
                         await self.wallet_state_manager.tx_store.delete_transaction_record(record.coin.name())
@@ -281,19 +281,19 @@ class CRCATWallet(CATWallet):
     def require_derivation_paths(self) -> bool:
         return False
 
-    def puzzle_for_pk(self, pubkey: G1Element) -> Program:
+    def puzzle_for_pk(self, pubkey: G1Element) -> Program:  # pragma: no cover
         raise NotImplementedError("puzzle_for_pk is a legacy method and is not available on CR-CAT wallets")
 
-    def puzzle_hash_for_pk(self, pubkey: G1Element) -> bytes32:
+    def puzzle_hash_for_pk(self, pubkey: G1Element) -> bytes32:  # pragma: no cover
         raise NotImplementedError("puzzle_hash_for_pk is a legacy method and is not available on CR-CAT wallets")
 
-    async def get_new_cat_puzzle_hash(self) -> bytes32:
+    async def get_new_cat_puzzle_hash(self) -> bytes32:  # pragma: no cover
         raise NotImplementedError("get_new_cat_puzzle_hash is a legacy method and is not available on CR-CAT wallets")
 
-    async def sign(self, spend_bundle: SpendBundle) -> SpendBundle:
+    async def sign(self, spend_bundle: SpendBundle) -> SpendBundle:  # pragma: no cover
         raise NotImplementedError("get_new_cat_puzzle_hash is a legacy method and is not available on CR-CAT wallets")
 
-    async def inner_puzzle_for_cat_puzhash(self, cat_hash: bytes32) -> Program:
+    async def inner_puzzle_for_cat_puzhash(self, cat_hash: bytes32) -> Program:  # pragma: no cover
         raise NotImplementedError(
             "inner_puzzle_for_cat_puzhash is a legacy method and is not available on CR-CAT wallets"
         )
@@ -350,9 +350,9 @@ class CRCATWallet(CATWallet):
         return metadata
 
     def coin_record_to_crcat(self, coin_record: WalletCoinRecord) -> CRCAT:
-        if coin_record.coin_type not in {CoinType.CRCAT, CoinType.CRCAT_PENDING}:
+        if coin_record.coin_type not in {CoinType.CRCAT, CoinType.CRCAT_PENDING}:  # pragma: no cover
             raise ValueError(f"Attempting to spend a non-CRCAT coin: {coin_record.coin.name().hex()}")
-        if coin_record.metadata is None:
+        if coin_record.metadata is None:  # pragma: no cover
             raise ValueError(f"Attempting to spend a CRCAT coin without metadata: {coin_record.coin.name().hex()}")
         try:
             metadata: CRCATMetadata = CRCATWallet.get_metadata_from_record(coin_record)
@@ -370,7 +370,7 @@ class CRCATWallet(CATWallet):
             )
             return crcat
         except Exception as e:
-            raise ValueError(f"Error parsing CRCAT metadata: {e}")
+            raise ValueError(f"Error parsing CRCAT metadata: {e}")  # pragma: no cover
 
     async def get_lineage_proof_for_coin(self, coin: Coin) -> Optional[LineageProof]:
         record: Optional[WalletCoinRecord] = await self.wallet_state_manager.coin_store.get_coin_record(coin.name())
@@ -486,7 +486,7 @@ class CRCATWallet(CATWallet):
         # Loop through the coins we've selected and gather the information we need to spend them
         vc: Optional[VerifiedCredential] = None
         vc_announcements_to_make: List[bytes] = []
-        inner_spends: List[Tuple[CRCAT, Program, Program]] = []
+        inner_spends: List[Tuple[CRCAT, int, Program, Program]] = []
         chia_tx = None
         first = True
         announcement: Announcement
@@ -506,7 +506,6 @@ class CRCATWallet(CATWallet):
             crcat: CRCAT = self.coin_record_to_crcat(coin)
             vc_announcements_to_make.append(crcat.expected_announcement())
             if first:
-                first = False
                 announcement = Announcement(coin.name(), std_hash(b"".join([c.name() for c in cat_coins])))
                 if need_chia_transaction:
                     if fee > regular_chia_to_claim:
@@ -526,7 +525,7 @@ class CRCATWallet(CATWallet):
                             puzzle_announcements_to_assert=puzzle_announcements_bytes,
                         )
                     elif regular_chia_to_claim > fee:
-                        chia_tx, _ = await self.create_tandem_xch_tx(
+                        chia_tx, xch_announcement = await self.create_tandem_xch_tx(
                             fee,
                             uint64(regular_chia_to_claim),
                             min_coin_amount=min_coin_amount,
@@ -534,10 +533,11 @@ class CRCATWallet(CATWallet):
                             excluded_coin_amounts=excluded_coin_amounts,
                             reuse_puzhash=reuse_puzhash,
                         )
+                        assert xch_announcement is not None
                         innersol = self.standard_wallet.make_solution(
                             primaries=primaries,
                             coin_announcements={announcement.message},
-                            coin_announcements_to_assert={announcement.name()},
+                            coin_announcements_to_assert={xch_announcement.name()},
                         )
                 else:
                     innersol = self.standard_wallet.make_solution(
@@ -551,7 +551,7 @@ class CRCATWallet(CATWallet):
                     primaries=[],
                     coin_announcements_to_assert={announcement.name()},
                 )
-            if cat_discrepancy is not None:
+            if first and cat_discrepancy is not None:
                 # TODO: This line is a hack, make_solution should allow us to pass extra conditions to it
                 innersol = Program.to(
                     [[], (1, Program.to([51, None, -113, tail_reveal, tail_solution]).cons(innersol.at("rfr"))), []]
@@ -562,22 +562,24 @@ class CRCATWallet(CATWallet):
                 )
             )
             if inner_derivation_record is None:
-                raise RuntimeError(
+                raise RuntimeError(  # pragma: no cover
                     f"CR-CAT {crcat} has an inner puzzle hash {crcat.inner_puzzle_hash} that we don't have the keys for"
                 )
             inner_puzzle: Program = self.standard_wallet.puzzle_for_pk(inner_derivation_record.pubkey)
             inner_spends.append(
                 (
                     crcat,
+                    extra_delta if first else 0,
                     inner_puzzle,
                     innersol,
                 )
             )
+            first = False
 
-        if vc is None:
+        if vc is None:  # pragma: no cover
             raise RuntimeError("Spending no cat coins is not an appropriate use of _generate_unsigned_spendbundle")
         if vc.proof_hash is None:
-            raise RuntimeError("CR-CATs found an appropriate VC but that VC contains no proofs")
+            raise RuntimeError("CR-CATs found an appropriate VC but that VC contains no proofs")  # pragma: no cover
 
         proof_of_inclusions: Program = await vc_wallet.proof_of_inclusions_for_root_and_keys(
             vc.proof_hash, self.info.proofs_checker.flags
@@ -601,7 +603,7 @@ class CRCATWallet(CATWallet):
         else:
             vc_txs = []
 
-        for crcat, _, _ in inner_spends:
+        for crcat, _, _, _ in inner_spends:
             await self.standard_wallet.hack_populate_secret_key_for_puzzle_hash(crcat.inner_puzzle_hash)
 
         return (
@@ -649,7 +651,7 @@ class CRCATWallet(CATWallet):
             memos = [[] for _ in range(len(puzzle_hashes))]
 
         if not (len(memos) == len(puzzle_hashes) == len(amounts)):
-            raise ValueError("Memos, puzzle_hashes, and amounts must have the same length")
+            raise ValueError("Memos, puzzle_hashes, and amounts must have the same length")  # pragma: no cover
 
         payments = []
         for amount, puzhash, memo_list in zip(amounts, puzzle_hashes, memos):
@@ -670,7 +672,7 @@ class CRCATWallet(CATWallet):
         if not ignore_max_send_amount:
             max_send = await self.get_max_send_amount()
             if payment_sum > max_send:
-                raise ValueError(f"Can't send more than {max_send} mojos in a single transaction")
+                raise ValueError(f"Can't send more than {max_send} mojos in a single transaction")  # pragma: no cover
         unsigned_spend_bundle, other_txs = await self._generate_unsigned_spendbundle(
             payments,
             fee,
@@ -759,10 +761,10 @@ class CRCATWallet(CATWallet):
         vc: Optional[VerifiedCredential] = await vc_wallet.get_vc_with_provider_in_and_proofs(
             self.info.authorized_providers, self.info.proofs_checker.flags
         )
-        if vc is None:
+        if vc is None:  # pragma: no cover
             raise RuntimeError(f"No VC exists that can approve spends for CR-CAT wallet {self.id()}")
         if vc.proof_hash is None:
-            raise RuntimeError(f"VC {vc.launcher_id} has no proofs to authorize transaction")
+            raise RuntimeError(f"VC {vc.launcher_id} has no proofs to authorize transaction")  # pragma: no cover
         proof_of_inclusions: Program = await vc_wallet.proof_of_inclusions_for_root_and_keys(
             vc.proof_hash, self.info.proofs_checker.flags
         )
@@ -782,6 +784,7 @@ class CRCATWallet(CATWallet):
             [
                 (
                     crcat,
+                    0,
                     construct_pending_approval_state(inner_puzhash, uint64(crcat.coin.amount)),
                     Program.to([nonce]),
                 )
@@ -807,7 +810,7 @@ class CRCATWallet(CATWallet):
                 reuse_puzhash=reuse_puzhash,
             )
             if chia_tx.spend_bundle is None:
-                raise RuntimeError("Did not get spendbundle for fee transaction")
+                raise RuntimeError("Did not get spendbundle for fee transaction")  # pragma: no cover
             claim_bundle = SpendBundle.aggregate([claim_bundle, chia_tx.spend_bundle])
         else:
             chia_tx = None
@@ -872,7 +875,7 @@ class CRCATWallet(CATWallet):
         ):
             inner_puzzle_driver: Optional[PuzzleInfo] = puzzle_driver.also()
             if inner_puzzle_driver is None:
-                raise ValueError("Malformed puzzle driver passed to CRCATWallet.match_puzzle_info")
+                raise ValueError("Malformed puzzle driver passed to CRCATWallet.match_puzzle_info")  # pragma: no cover
             return (
                 AssetType(inner_puzzle_driver.type()) == AssetType.CR
                 and [bytes32(provider) for provider in inner_puzzle_driver["authorized_providers"]]

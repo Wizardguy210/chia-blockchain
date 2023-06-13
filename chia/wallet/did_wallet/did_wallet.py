@@ -1473,7 +1473,13 @@ class DIDWallet:
             return False
         return (
             create_singleton_puzzle(
-                hint,  # type: ignore[arg-type]
+                did_wallet_puzzles.create_innerpuz(
+                    hint,  # type: ignore[arg-type]
+                    self.did_info.backup_ids,
+                    uint64(self.did_info.num_of_backup_ids_needed),
+                    self.did_info.origin_coin.name(),
+                    did_wallet_puzzles.metadata_to_program(json.loads(self.did_info.metadata)),
+                ),
                 self.did_info.origin_coin.name(),
             ).get_tree_hash_precalc(hint)
             == coin.puzzle_hash

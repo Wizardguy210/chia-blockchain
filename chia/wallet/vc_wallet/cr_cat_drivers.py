@@ -368,7 +368,7 @@ class CRCAT:
 
         all_conditions: List[Program] = list(conditions.as_iter())
         if len(all_conditions) > 1000:
-            raise RuntimeError("More than 1000 conditions not currently supported by CRCAT drivers")
+            raise RuntimeError("More than 1000 conditions not currently supported by CRCAT drivers")  # pragma: no cover
 
         # Almost complete except the coin's full puzzle hash which we want to use the class method to calculate
         partially_completed_crcats: List[CRCAT] = [
@@ -494,7 +494,7 @@ class CRCAT:
     @classmethod
     def spend_many(
         cls: Type[_T_CRCAT],
-        inner_spends: List[Tuple[_T_CRCAT, Program, Program]],  # CRCAT, inner puzzle, inner solution
+        inner_spends: List[Tuple[_T_CRCAT, int, Program, Program]],  # CRCAT, extra_delta, inner puzzle, inner solution
         # CR layer solving info
         proof_of_inclusions: Program,
         proof_checker_solution: Program,
@@ -516,7 +516,7 @@ class CRCAT:
         def prev_index(index: int) -> int:
             return index - 1
 
-        sorted_inner_spends: List[Tuple[_T_CRCAT, Program, Program]] = sorted(
+        sorted_inner_spends: List[Tuple[_T_CRCAT, int, Program, Program]] = sorted(
             inner_spends,
             key=lambda spend: spend[0].coin.name(),
         )
@@ -527,7 +527,7 @@ class CRCAT:
 
         subtotal: int = 0
         for i, inner_spend in enumerate(sorted_inner_spends):
-            crcat, inner_puzzle, inner_solution = inner_spend
+            crcat, extra_delta, inner_puzzle, inner_solution = inner_spend
             conditions: List[Program] = list(inner_puzzle.run(inner_solution).as_iter())
             output_amount: uint64 = uint64(
                 sum(
@@ -535,9 +535,10 @@ class CRCAT:
                     for c in conditions
                     if c.at("f").as_int() == 51 and c.at("rrf").as_int() != -113
                 )
+                + extra_delta
             )
-            next_crcat, _, _ = sorted_inner_spends[next_index(i)]
-            prev_crcat, _, _ = sorted_inner_spends[prev_index(i)]
+            next_crcat, _, _, _ = sorted_inner_spends[next_index(i)]
+            prev_crcat, _, _, _ = sorted_inner_spends[prev_index(i)]
             expected_announcements, coin_spend, new_crcats = crcat.do_spend(
                 prev_crcat.coin.name(),
                 LineageProof(
@@ -548,7 +549,7 @@ class CRCAT:
                     uint64(next_crcat.coin.amount),
                 ),
                 subtotal,
-                0,  # TODO: add support for mint/melt
+                extra_delta,
                 proof_of_inclusions,
                 proof_checker_solution,
                 provider_id,
@@ -621,7 +622,7 @@ class ProofsChecker(Streamable):
     @classmethod
     def from_program(cls, uncurried_puzzle: UncurriedPuzzle) -> ProofsChecker:
         if uncurried_puzzle.mod != PROOF_FLAGS_CHECKER:
-            raise ValueError("Puzzle was not a proof checker")
+            raise ValueError("Puzzle was not a proof checker")  # pragma: no cover
 
         return cls([flag.at("f").atom.decode("utf8") for flag in uncurried_puzzle.args.at("f").as_iter()])
 

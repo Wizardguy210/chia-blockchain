@@ -263,13 +263,33 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     await time_out_assert_not_none(
         15, check_length, 1, wallet_node_1.wallet_state_manager.get_all_wallet_info_entries, WalletType.CRCAT
     )
-    cr_cat_wallet_id_1: uint16 = (
+    cr_cat_wallet_info = (
         await wallet_node_1.wallet_state_manager.get_all_wallet_info_entries(wallet_type=WalletType.CRCAT)
-    )[0].id
+    )[0]
+    cr_cat_wallet_id_1: uint16 = cr_cat_wallet_info.id
     cr_cat_wallet_1: CRCATWallet = wallet_node_1.wallet_state_manager.wallets[cr_cat_wallet_id_1]
+    assert await CRCATWallet.create(  # just testing the create method doesn't throw
+        wallet_node_1.wallet_state_manager,
+        wallet_node_1.wallet_state_manager.main_wallet,
+        cr_cat_wallet_info,
+    )
     await time_out_assert(15, cr_cat_wallet_1.get_confirmed_balance, 0)
     await time_out_assert(15, cr_cat_wallet_1.get_pending_approval_balance, 100)
     await time_out_assert(15, cr_cat_wallet_1.get_unconfirmed_balance, 100)
+    assert await client_1.get_wallet_balance(cr_cat_wallet_id_1) == {
+        "confirmed_wallet_balance": 0,
+        "unconfirmed_wallet_balance": 0,
+        "spendable_balance": 0,
+        "pending_change": 0,
+        "max_send_amount": 0,
+        "unspent_coin_count": 0,
+        "pending_coin_removal_count": 0,
+        "pending_approval_balance": 100,
+        "wallet_id": cr_cat_wallet_id_1,
+        "wallet_type": cr_cat_wallet_1.type().value,
+        "asset_id": cr_cat_wallet_1.get_asset_id(),
+        "fingerprint": wallet_node_1.logged_in_fingerprint,
+    }
     pending_tx = await client_1.get_transactions(
         cr_cat_wallet_1.id(),
         0,
@@ -302,6 +322,27 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     await time_out_assert(15, cr_cat_wallet_1.get_confirmed_balance, 100)
     await time_out_assert(15, cr_cat_wallet_1.get_pending_approval_balance, 0)
     await time_out_assert(15, cr_cat_wallet_1.get_unconfirmed_balance, 100)
+    await time_out_assert_not_none(
+        10, check_vc_record_has_parent_id, vc_record_updated.vc.coin.name(), client_1, vc_record.vc.launcher_id
+    )
+    vc_record_updated = await client_1.vc_get(vc_record.vc.launcher_id)
+    assert vc_record_updated is not None
+
+    # Test melting a CRCAT
+    tx = await client_1.cat_spend(
+        cr_cat_wallet_id_1,
+        uint64(50),
+        encode_puzzle_hash(await wallet_1.get_new_puzzlehash(), "txch"),
+        uint64(0),
+        cat_discrepancy=(-50, Program.to(None), Program.to(None)),
+    )
+    await wallet_node_1.wallet_state_manager.add_pending_transaction(tx)
+    assert tx.spend_bundle is not None
+    spend_bundle = tx.spend_bundle
+    await time_out_assert_not_none(5, full_node_api.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
+    await full_node_api.farm_blocks_to_wallet(count=num_blocks, wallet=wallet_1)
+    await full_node_api.wait_for_wallet_synced(wallet_node=wallet_node_1, timeout=20)
+    await time_out_assert(15, cr_cat_wallet_1.get_pending_approval_balance, 50)
 
     # Revoke VC
     await time_out_assert_not_none(

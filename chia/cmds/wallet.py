@@ -1589,7 +1589,7 @@ def approve_r_cats_cmd(
     min_coin_amount: Optional[int],
     max_coin_amount: Optional[int],
     reuse: bool,
-) -> None:
+) -> None:  # pragma: no cover
     extra_params = {
         "id": id,
         "min_amount_to_claim": min_amount_to_claim,

@@ -86,26 +86,22 @@ async def claim_pending_approval_balance(
 # To pin down the behavior that we intend to eventually deprecate, it only gets one test case.
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "wallets_prefarm_services",
-    [1],
-    indirect=["wallets_prefarm_services"],
-)
-@pytest.mark.parametrize(
-    "trusted,forwards_compat,reuse_puzhash,credential_restricted,active_softfork_height",
+    "wallets_prefarm_services,trusted,forwards_compat,reuse_puzhash,credential_restricted,active_softfork_height",
     [
-        (True, True, False, False, SOFTFORK_HEIGHTS[0]),
-        (True, False, True, True, SOFTFORK_HEIGHTS[0]),
-        (True, False, False, False, SOFTFORK_HEIGHTS[0]),
-        (True, False, True, False, SOFTFORK_HEIGHTS[0]),
-        (True, False, False, True, SOFTFORK_HEIGHTS[0]),
-        (False, False, True, True, SOFTFORK_HEIGHTS[0]),
-        (False, False, False, False, SOFTFORK_HEIGHTS[0]),
-        (False, False, True, False, SOFTFORK_HEIGHTS[0]),
-        (False, False, False, True, SOFTFORK_HEIGHTS[0]),
-        (True, False, False, False, SOFTFORK_HEIGHTS[1]),
-        (True, False, False, False, SOFTFORK_HEIGHTS[2]),
-        (True, False, False, False, SOFTFORK_HEIGHTS[3]),
+        (3, True, True, False, False, SOFTFORK_HEIGHTS[0]),  # 3 farmed blocks is how it was when the test was made
+        (1, True, False, True, True, SOFTFORK_HEIGHTS[0]),
+        (1, True, False, False, False, SOFTFORK_HEIGHTS[0]),
+        (1, True, False, True, False, SOFTFORK_HEIGHTS[0]),
+        (1, True, False, False, True, SOFTFORK_HEIGHTS[0]),
+        (1, False, False, True, True, SOFTFORK_HEIGHTS[0]),
+        (1, False, False, False, False, SOFTFORK_HEIGHTS[0]),
+        (1, False, False, True, False, SOFTFORK_HEIGHTS[0]),
+        (1, False, False, False, True, SOFTFORK_HEIGHTS[0]),
+        (1, True, False, False, False, SOFTFORK_HEIGHTS[1]),
+        (1, True, False, False, False, SOFTFORK_HEIGHTS[2]),
+        (1, True, False, False, False, SOFTFORK_HEIGHTS[3]),
     ],
+    indirect=["wallets_prefarm_services"],
 )
 async def test_cat_trades(
     wallets_prefarm_services,

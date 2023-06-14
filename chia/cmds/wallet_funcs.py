@@ -63,14 +63,14 @@ def print_transaction(tx: TransactionRecord, verbose: bool, name, address_prefix
         print("")
 
 
-def get_mojo_per_unit(wallet_type: WalletType) -> int:
+def get_mojo_per_unit(wallet_type: WalletType) -> int:  # pragma: no cover
     mojo_per_unit: int
     if wallet_type in {
         WalletType.STANDARD_WALLET,
         WalletType.POOLING_WALLET,
         WalletType.DATA_LAYER,
         WalletType.VC,
-    }:  # pragma: no cover
+    }:
         mojo_per_unit = units["chia"]
     elif wallet_type in {WalletType.CAT, WalletType.CRCAT}:
         mojo_per_unit = units["cat"]

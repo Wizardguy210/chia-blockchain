@@ -242,12 +242,14 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     )[0].id
     cr_cat_wallet_0: CRCATWallet = wallet_node_0.wallet_state_manager.wallets[cr_cat_wallet_id_0]
     assert await wallet_node_0.wallet_state_manager.get_wallet_for_asset_id(cr_cat_wallet_0.get_asset_id()) is not None
+    wallet_1_addr = encode_puzzle_hash(await wallet_1.get_new_puzzlehash(), "txch")
     tx = await client_0.cat_spend(
         cr_cat_wallet_0.id(),
         uint64(100),
-        encode_puzzle_hash(await wallet_1.get_new_puzzlehash(), "txch"),
+        wallet_1_addr,
         uint64(2000000000),
         memos=["hey"],
+        reuse_puzhash=False,
     )
     confirmed_balance -= 2000000000
     await wallet_node_0.wallet_state_manager.add_pending_transaction(tx)
@@ -331,10 +333,11 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     # Test melting a CRCAT
     tx = await client_1.cat_spend(
         cr_cat_wallet_id_1,
-        uint64(50),
-        encode_puzzle_hash(await wallet_1.get_new_puzzlehash(), "txch"),
+        uint64(25),
+        wallet_1_addr,
         uint64(0),
         cat_discrepancy=(-50, Program.to(None), Program.to(None)),
+        reuse_puzhash=True,
     )
     await wallet_node_1.wallet_state_manager.add_pending_transaction(tx)
     assert tx.spend_bundle is not None
@@ -342,7 +345,10 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     await time_out_assert_not_none(5, full_node_api.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
     await full_node_api.farm_blocks_to_wallet(count=num_blocks, wallet=wallet_1)
     await full_node_api.wait_for_wallet_synced(wallet_node=wallet_node_1, timeout=20)
-    await time_out_assert(15, cr_cat_wallet_1.get_pending_approval_balance, 50)
+    # should go straight to confirmed because we sent to ourselves
+    await time_out_assert(15, cr_cat_wallet_1.get_confirmed_balance, 50)
+    await time_out_assert(15, cr_cat_wallet_1.get_pending_approval_balance, 0)
+    await time_out_assert(15, cr_cat_wallet_1.get_unconfirmed_balance, 50)
 
     # Revoke VC
     await time_out_assert_not_none(

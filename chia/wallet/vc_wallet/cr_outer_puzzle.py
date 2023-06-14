@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from clvm_tools.binutils import disassemble
+
 from chia.types.blockchain_format.coin import Coin
 from chia.types.blockchain_format.program import Program
 from chia.types.blockchain_format.sized_bytes import bytes32
@@ -28,7 +30,7 @@ class CROuterPuzzle:
         constructor_dict: Dict[str, Any] = {
             "type": "credential restricted",
             "authorized_providers": ["0x" + ap.hex() for ap in authorized_providers],
-            "proofs_checker": proofs_checker,
+            "proofs_checker": disassemble(proofs_checker),
         }
         next_constructor = self._match(uncurry_puzzle(inner_puzzle))
         if next_constructor is not None:
@@ -88,6 +90,11 @@ class CROuterPuzzle:
                 None,
                 None,
             ]
+
+        also = constructor.also()
+        if also is not None:
+            inner_solution = self._solve(also, solver, inner_puzzle, inner_solution)
+
         return solve_cr_layer(  # type: ignore[call-arg]
             *vc_info,
             coin.name(),

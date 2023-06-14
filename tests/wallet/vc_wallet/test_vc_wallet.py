@@ -245,11 +245,10 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     wallet_1_addr = encode_puzzle_hash(await wallet_1.get_new_puzzlehash(), "txch")
     tx = await client_0.cat_spend(
         cr_cat_wallet_0.id(),
-        uint64(100),
+        uint64(90),
         wallet_1_addr,
         uint64(2000000000),
         memos=["hey"],
-        reuse_puzhash=False,
     )
     confirmed_balance -= 2000000000
     await wallet_node_0.wallet_state_manager.add_pending_transaction(tx)
@@ -276,8 +275,8 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
         cr_cat_wallet_info,
     )
     await time_out_assert(15, cr_cat_wallet_1.get_confirmed_balance, 0)
-    await time_out_assert(15, cr_cat_wallet_1.get_pending_approval_balance, 100)
-    await time_out_assert(15, cr_cat_wallet_1.get_unconfirmed_balance, 100)
+    await time_out_assert(15, cr_cat_wallet_1.get_pending_approval_balance, 90)
+    await time_out_assert(15, cr_cat_wallet_1.get_unconfirmed_balance, 90)
     assert await client_1.get_wallet_balance(cr_cat_wallet_id_1) == {
         "confirmed_wallet_balance": 0,
         "unconfirmed_wallet_balance": 0,
@@ -286,7 +285,7 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
         "max_send_amount": 0,
         "unspent_coin_count": 0,
         "pending_coin_removal_count": 0,
-        "pending_approval_balance": 100,
+        "pending_approval_balance": 90,
         "wallet_id": cr_cat_wallet_id_1,
         "wallet_type": cr_cat_wallet_1.type().value,
         "asset_id": cr_cat_wallet_1.get_asset_id(),
@@ -314,16 +313,16 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     # Claim the pending approval to our wallet
     txs = await client_1.crcat_approve_pending(
         uint32(cr_cat_wallet_id_1),
-        uint64(100),
-        fee=uint64(100),
+        uint64(90),
+        fee=uint64(90),
     )
     spend_bundle = next(tx.spend_bundle for tx in txs if tx.spend_bundle is not None)
     await time_out_assert_not_none(5, full_node_api.full_node.mempool_manager.get_spendbundle, spend_bundle.name())
     await full_node_api.farm_blocks_to_wallet(count=num_blocks, wallet=wallet_1)
     await full_node_api.wait_for_wallet_synced(wallet_node=wallet_node_1, timeout=20)
-    await time_out_assert(15, cr_cat_wallet_1.get_confirmed_balance, 100)
+    await time_out_assert(15, cr_cat_wallet_1.get_confirmed_balance, 90)
     await time_out_assert(15, cr_cat_wallet_1.get_pending_approval_balance, 0)
-    await time_out_assert(15, cr_cat_wallet_1.get_unconfirmed_balance, 100)
+    await time_out_assert(15, cr_cat_wallet_1.get_unconfirmed_balance, 90)
     await time_out_assert_not_none(
         10, check_vc_record_has_parent_id, vc_record_updated.vc.coin.name(), client_1, vc_record.vc.launcher_id
     )
@@ -333,7 +332,7 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     # Test melting a CRCAT
     tx = await client_1.cat_spend(
         cr_cat_wallet_id_1,
-        uint64(25),
+        uint64(20),
         wallet_1_addr,
         uint64(0),
         cat_discrepancy=(-50, Program.to(None), Program.to(None)),
@@ -346,9 +345,9 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     await full_node_api.farm_blocks_to_wallet(count=num_blocks, wallet=wallet_1)
     await full_node_api.wait_for_wallet_synced(wallet_node=wallet_node_1, timeout=20)
     # should go straight to confirmed because we sent to ourselves
-    await time_out_assert(15, cr_cat_wallet_1.get_confirmed_balance, 50)
+    await time_out_assert(15, cr_cat_wallet_1.get_confirmed_balance, 40)
     await time_out_assert(15, cr_cat_wallet_1.get_pending_approval_balance, 0)
-    await time_out_assert(15, cr_cat_wallet_1.get_unconfirmed_balance, 50)
+    await time_out_assert(15, cr_cat_wallet_1.get_unconfirmed_balance, 40)
 
     # Revoke VC
     await time_out_assert_not_none(

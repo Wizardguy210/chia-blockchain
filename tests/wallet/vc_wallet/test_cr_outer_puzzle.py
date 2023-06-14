@@ -6,7 +6,14 @@ from chia.types.blockchain_format.coin import Coin
 from chia.types.blockchain_format.program import Program
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.util.ints import uint64
-from chia.wallet.outer_puzzles import construct_puzzle, get_inner_puzzle, get_inner_solution, match_puzzle, solve_puzzle
+from chia.wallet.outer_puzzles import (
+    construct_puzzle,
+    create_asset_id,
+    get_inner_puzzle,
+    get_inner_solution,
+    match_puzzle,
+    solve_puzzle,
+)
 from chia.wallet.puzzle_drivers import PuzzleInfo, Solver
 from chia.wallet.uncurried_puzzle import uncurry_puzzle
 from chia.wallet.vc_wallet.cr_cat_drivers import construct_cr_layer
@@ -32,6 +39,7 @@ def test_cat_outer_puzzle() -> None:
     assert inside_cr_driver["proofs_checker"] == proofs_checker
     assert construct_puzzle(cr_driver, ACS) == double_cr_puzzle
     assert get_inner_puzzle(cr_driver, uncurried_cr_puzzle) == ACS
+    assert create_asset_id(cr_driver) is None
 
     # Set up for solve
     coin: Coin = Coin(bytes32([0] * 32), bytes32([0] * 32), uint64(0))

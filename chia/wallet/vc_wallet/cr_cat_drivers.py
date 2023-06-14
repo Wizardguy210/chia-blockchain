@@ -529,13 +529,13 @@ class CRCAT:
         for i, inner_spend in enumerate(sorted_inner_spends):
             crcat, extra_delta, inner_puzzle, inner_solution = inner_spend
             conditions: List[Program] = list(inner_puzzle.run(inner_solution).as_iter())
-            output_amount: uint64 = uint64(
+            output_amount: int = (
                 sum(
                     c.at("rrf").as_int()
                     for c in conditions
                     if c.at("f").as_int() == 51 and c.at("rrf").as_int() != -113
                 )
-                + extra_delta
+                - extra_delta
             )
             next_crcat, _, _, _ = sorted_inner_spends[next_index(i)]
             prev_crcat, _, _, _ = sorted_inner_spends[prev_index(i)]

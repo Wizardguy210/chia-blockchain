@@ -369,8 +369,8 @@ class CRCATWallet(CATWallet):
                 else metadata.inner_puzzle_hash,
             )
             return crcat
-        except Exception as e:
-            raise ValueError(f"Error parsing CRCAT metadata: {e}")  # pragma: no cover
+        except Exception as e:  # pragma: no cover
+            raise ValueError(f"Error parsing CRCAT metadata: {e}")
 
     async def get_lineage_proof_for_coin(self, coin: Coin) -> Optional[LineageProof]:  # pragma: no cover
         raise RuntimeError("get_lineage_proof_for_coin is a legacy method and is not available on CR-CAT wallets")

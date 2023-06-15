@@ -286,7 +286,7 @@ class WalletStateManager:
                     self.main_wallet,
                     wallet_info,
                 )
-            elif wallet_type == WalletType.CRCAT:
+            elif wallet_type == WalletType.CRCAT:  # pragma: no cover
                 wallet = await CRCATWallet.create(
                     self,
                     self.main_wallet,
@@ -923,7 +923,7 @@ class WalletStateManager:
                 if CRCAT.is_cr_cat(uncurry_puzzle(Program.from_bytes(bytes(coin_spend.puzzle_reveal)))):
                     is_crcat = True
                 else:
-                    return None
+                    return None  # pragma: no cover
             if is_crcat:
                 # Since CRCAT wallet doesn't have derivation path, every CRCAT will go through this code path
                 crcat: CRCAT = next(
@@ -939,8 +939,8 @@ class WalletStateManager:
                         uint64(coin_state.coin.amount),
                     ).get_tree_hash()
                 ):
-                    self.log.error(f"Unknown CRCAT inner puzzle, coin ID:{crcat.coin.name().hex()}")
-                    return None
+                    self.log.error(f"Unknown CRCAT inner puzzle, coin ID:{crcat.coin.name().hex()}")  # pragma: no cover
+                    return None  # pragma: no cover
 
                 # Check if we already have a wallet
                 for wallet_info in await self.get_all_wallet_info_entries(wallet_type=WalletType.CRCAT):

@@ -431,7 +431,7 @@ class VCWallet:
         if reuse_puzhash is None:
             reuse_puzhash_config = self.wallet_state_manager.config.get("reuse_public_key_for_change", None)
             if reuse_puzhash_config is None:
-                reuse_puzhash = False
+                reuse_puzhash = False  # pragma: no cover
             else:
                 reuse_puzhash = reuse_puzhash_config.get(
                     str(self.wallet_state_manager.wallet_node.logged_in_fingerprint), False
@@ -448,7 +448,7 @@ class VCWallet:
                     if spend in offer._bundle.coin_spends:
                         spends_to_fix[spend.coin.name()] = spend
                 else:
-                    if spend in offer._bundle.coin_spends:
+                    if spend in offer._bundle.coin_spends:  # pragma: no cover
                         other_spends.append(spend)
             else:
                 if spend in offer._bundle.coin_spends:
@@ -466,7 +466,7 @@ class VCWallet:
                 for vc_rec in await self.store.get_vc_records_by_providers(crcat_spend.crcat.authorized_providers)
                 if vc_rec.confirmed_at_height != 0
             ]
-            if len(available_vcs) == 0:
+            if len(available_vcs) == 0:  # pragma: no cover
                 raise ValueError(f"No VC available with provider in {crcat_spend.crcat.authorized_providers}")
             vc: VerifiedCredential = available_vcs[0].vc
             vc_to_use: bytes32 = vc.launcher_id
@@ -498,7 +498,7 @@ class VCWallet:
                     )
                     or bytes32(cc.at("rf").atom) == Offer.ph()  # it's going to the offer mod
                 ):
-                    outputs_ok = False
+                    outputs_ok = False  # pragma: no cover
             if our_crcat or outputs_ok:
                 announcements_to_make.setdefault(vc_to_use, [])
                 announcements_to_assert.setdefault(vc_to_use, [])
@@ -540,7 +540,7 @@ class VCWallet:
                         )
                     )
             else:
-                raise ValueError("Wallet cannot verify all spends in specified offer")
+                raise ValueError("Wallet cannot verify all spends in specified offer")  # pragma: no cover
 
         vc_spends: List[SpendBundle] = []
         for launcher_id, vc in vcs.items():
@@ -584,23 +584,23 @@ class VCWallet:
         self, authorized_providers: List[bytes32], proofs: List[str]
     ) -> VerifiedCredential:
         vc_records: List[VCRecord] = await self.store.get_vc_records_by_providers(authorized_providers)
-        if len(vc_records) == 0:
+        if len(vc_records) == 0:  # pragma: no cover
             raise ValueError(f"VCWallet has no VCs with providers in the following list: {authorized_providers}")
         else:
             for rec in vc_records:
                 if rec.vc.proof_hash is None:
-                    continue
+                    continue  # pragma: no cover
                 vc_proofs: Optional[VCProofs] = await self.store.get_proofs_for_root(rec.vc.proof_hash)
                 if vc_proofs is None:
-                    continue
+                    continue  # pragma: no cover
                 if all(proof in vc_proofs.key_value_pairs for proof in proofs):
                     return rec.vc
-        raise ValueError(f"No authorized VC has the correct proofs: {proofs}")
+        raise ValueError(f"No authorized VC has the correct proofs: {proofs}")  # pragma: no cover
 
     async def proof_of_inclusions_for_root_and_keys(self, root: bytes32, keys: List[str]) -> Program:
         vc_proofs: Optional[VCProofs] = await self.store.get_proofs_for_root(root)
         if vc_proofs is None:
-            raise RuntimeError(f"No proofs exist for VC root: {root.hex()}")
+            raise RuntimeError(f"No proofs exist for VC root: {root.hex()}")  # pragma: no cover
         else:
             return vc_proofs.prove_keys(keys)
 

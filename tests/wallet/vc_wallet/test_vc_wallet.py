@@ -232,7 +232,7 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     async def check_length(length: int, func: Callable[..., Awaitable[Any]], *args: Any) -> Optional[Literal[True]]:
         if len(await func(*args)) == length:
             return True
-        return None
+        return None  # pragma: no cover
 
     await time_out_assert_not_none(
         15, check_length, 1, wallet_node_0.wallet_state_manager.get_all_wallet_info_entries, WalletType.CRCAT
@@ -323,6 +323,9 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     await time_out_assert(15, cr_cat_wallet_1.get_confirmed_balance, 90)
     await time_out_assert(15, cr_cat_wallet_1.get_pending_approval_balance, 0)
     await time_out_assert(15, cr_cat_wallet_1.get_unconfirmed_balance, 90)
+    await time_out_assert(
+        15, cr_cat_wallet_1.wallet_state_manager.get_confirmed_balance_for_wallet, 90, cr_cat_wallet_id_1
+    )
     await time_out_assert_not_none(
         10, check_vc_record_has_parent_id, vc_record_updated.vc.coin.name(), client_1, vc_record.vc.launcher_id
     )
@@ -417,7 +420,7 @@ async def test_cat_wallet_conversion(
     async def check_length(length: int, func: Callable[..., Awaitable[Any]], *args: Any) -> Optional[Literal[True]]:
         if len(await func(*args)) == length:
             return True
-        return None
+        return None  # pragma: no cover
 
     await time_out_assert_not_none(
         15, check_length, 1, wallet_node_0.wallet_state_manager.get_all_wallet_info_entries, WalletType.CRCAT

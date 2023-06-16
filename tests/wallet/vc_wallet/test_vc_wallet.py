@@ -177,7 +177,7 @@ async def test_vc_lifecycle(self_hostname: str, two_wallet_nodes_services: Any, 
     assert new_vc_record is not None
 
     # Spend VC
-    proofs: VCProofs = VCProofs({"foo": "1", "bar": "1"})
+    proofs: VCProofs = VCProofs({"foo": "1", "bar": "1", "baz": "1", "qux": "1", "grault": "1"})
     proof_root: bytes32 = proofs.root()
     txs = await client_0.vc_spend(
         vc_record.vc.launcher_id,

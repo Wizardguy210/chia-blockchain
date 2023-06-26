@@ -75,6 +75,7 @@ async def create(
         elif state == "FARMING_TO_POOL":
             config = load_config(DEFAULT_ROOT_PATH, "config.yaml")
             enforce_https = config["full_node"]["selected_network"] == "mainnet"
+            assert pool_url is not None
             if enforce_https and not pool_url.startswith("https://"):
                 print(f"Pool URLs must be HTTPS on mainnet {pool_url}. Aborting.")
                 return

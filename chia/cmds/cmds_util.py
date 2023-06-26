@@ -206,6 +206,7 @@ async def get_wallet(root_path: Path, wallet_client: WalletRpcClient, fingerprin
     return selected_fingerprint
 
 
+@asynccontextmanager
 async def get_wallet_client(
     wallet_rpc_port: Optional[int],
     fingerprint: Optional[int] = None,
@@ -228,12 +229,7 @@ async def execute_with_wallet(
     extra_params: Dict[str, Any],
     function: Callable[[Dict[str, Any], WalletRpcClient, int], Awaitable[None]],
 ) -> None:
-    async with get_any_service_client(WalletRpcClient, wallet_rpc_port) as (wallet_client, _):
+    async with get_wallet_client(wallet_rpc_port, fingerprint) as (wallet_client, new_fp, _):
         if wallet_client is None:
-            return
-
-        new_fp = await get_wallet(DEFAULT_ROOT_PATH, wallet_client, fingerprint)
-        if new_fp is None:
-            return
-
+            return None
         await function(extra_params, wallet_client, new_fp)

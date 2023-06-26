@@ -42,7 +42,6 @@ node_config_section_names: Dict[Type[RpcClient], str] = {
     SimulatorFullNodeRpcClient: "full_node",
 }
 
-
 _T_RpcClient = TypeVar("_T_RpcClient", bound=RpcClient)
 
 
@@ -205,6 +204,22 @@ async def get_wallet(root_path: Path, wallet_client: WalletRpcClient, fingerprin
             await keychain_proxy.close()
 
     return selected_fingerprint
+
+
+async def get_wallet_client(
+    wallet_rpc_port: Optional[int],
+    fingerprint: Optional[int] = None,
+    root_path: Path = DEFAULT_ROOT_PATH,
+) -> AsyncIterator[Tuple[Optional[WalletRpcClient], int, Dict[str, Any]]]:
+    async with get_any_service_client(WalletRpcClient, wallet_rpc_port, root_path) as (wallet_client, config):
+        if wallet_client is None:
+            yield None, 0, config
+        else:
+            new_fp = await get_wallet(root_path, wallet_client, fingerprint)
+            if new_fp is None:
+                yield None, 0, config
+            else:
+                yield wallet_client, new_fp, config
 
 
 async def execute_with_wallet(

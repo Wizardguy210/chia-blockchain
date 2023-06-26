@@ -14,3 +14,10 @@ class TransactionType(IntEnum):
     INCOMING_CLAWBACK_SEND = 7
     OUTGOING_CLAWBACK = 8
     INCOMING_CRCAT_PENDING = 9
+
+
+CLAWBACK_TRANSACTION_TYPES = {
+    TransactionType.INCOMING_CLAWBACK_SEND.value,
+    TransactionType.INCOMING_CLAWBACK_RECEIVE.value,
+    TransactionType.INCOMING_CRCAT_PENDING.value,
+}
